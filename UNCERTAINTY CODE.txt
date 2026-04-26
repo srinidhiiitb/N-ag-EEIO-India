@@ -1,0 +1,3222 @@
+
+############################CROPLAND INPUTS#############################
+
+##straw ammoniation######
+import numpy as np
+
+# Given values
+fertilizer_lakh_tonnes = 163.33766  # in lakh tonnes
+fertilizer_tg = fertilizer_lakh_tonnes / 10  # Convert to Tg
+fertilizer_unc = 0.10  # 10%
+
+percent_straw = 0.05  # 5%
+percent_straw_unc = 0.10  # 10%
+
+n_content = 0.467  # 46.7%
+n_content_unc = 0  # assume fixed
+
+# === Method 1: Uncertainty Propagation ===
+central_value = fertilizer_tg * percent_straw * n_content
+
+# Relative uncertainty propagation
+rel_unc_total = np.sqrt(fertilizer_unc**2 + percent_straw_unc**2)
+abs_unc = central_value * rel_unc_total
+
+print("=== Straw Ammoniation N Input (Propagation) ===")
+print(f"Value: {central_value:.4f} Tg N")
+print(f"Uncertainty: ±{abs_unc:.4f} Tg N")
+print(f"Relative Uncertainty: ±{rel_unc_total*100:.2f}%")
+
+
+##food and kitchen waste######
+
+import numpy as np
+
+# Input values
+food_waste = 79_000_000  # kg/capita/year
+population = 487_702_168  # people
+n_content = 0.01  # 1% nitrogen content
+
+# Relative uncertainties (as fractions)
+ru_food_waste = 0.10
+ru_population = 0.05
+ru_n_content = 0.10
+
+# Total nitrogen in kg/year
+total_n_kg = food_waste * population * n_content
+
+# Convert to Tg (1 Tg = 1e12 g = 1e9 kg)
+total_n_tg = total_n_kg / 1e9
+
+# Propagation of relative uncertainty (multiplicative formula)
+combined_ru = np.sqrt(ru_food_waste**2 + ru_population**2 + ru_n_content**2)
+
+# Absolute uncertainty in Tg
+uncertainty_tg = total_n_tg * combined_ru
+
+# Output
+print(f"Estimated Total N from food waste: {total_n_tg:.4f} Tg N/year ± {uncertainty_tg:.4f} Tg")
+print(f"Relative Uncertainty: ±{combined_ru * 100:.2f}%")
+
+
+###fish powder######
+
+import numpy as np
+
+# Values
+aquatic_production = 0.7
+human_consumption = 0.2
+product_export = 0.04
+
+# Relative uncertainties (in decimals)
+ru_aq = 0.10
+ru_hc = 0.10
+ru_exp = 0.10
+
+# Step 1: Calculate fish powder
+fish_powder = aquatic_production - human_consumption - product_export
+
+# Step 2: Absolute uncertainties
+abs_unc_aq = aquatic_production * ru_aq
+abs_unc_hc = human_consumption * ru_hc
+abs_unc_exp = product_export * ru_exp
+
+# Step 3: Combine uncertainties (add in quadrature for subtraction)
+total_unc = np.sqrt(abs_unc_aq**2 + abs_unc_hc**2 + abs_unc_exp**2)
+
+# Step 4: Relative uncertainty (%)
+rel_unc_percent = (total_unc / fish_powder) * 100 if fish_powder != 0 else np.nan
+
+# Output
+print(f"Fish Powder Estimate: {fish_powder:.4f}")
+print(f"Uncertainty: ±{total_unc:.4f}")
+print(f"Relative Uncertainty: ±{rel_unc_percent:.2f}%")
+
+
+##forage####
+import numpy as np
+
+# Values
+hay_yield = 0.001  # Tg
+grazing_percent = 0.33  # as a fraction
+
+# Relative uncertainties
+ru_hay = 13.86 / 100
+ru_grazing = 15.88 / 100
+
+# Calculate forage
+forage = hay_yield * grazing_percent
+
+# Propagation of uncertainty for multiplication:
+rel_unc_total = np.sqrt(ru_hay**2 + ru_grazing**2)
+abs_unc_total = forage * rel_unc_total
+
+# Output
+print(f"Forage Estimate: {forage:.6f} Tg")
+print(f"Uncertainty: ±{abs_unc_total:.6f} Tg")
+print(f"Relative Uncertainty: ±{rel_unc_total*100:.2f}%")
+
+
+##accumulation:
+
+##change in breeding stock=accumulation
+
+import pandas as pd
+import numpy as np
+
+# ==== Step 1: Input data ====
+data = {
+    "animal": ["chicken", "duck", "swine", "cow", "buffalo", "goat", "sheep"],
+    "population": [314269000, 35507000, 885211, 51568474, 109719011, 150248487, 68099762],
+    "slaughtering": [2839116000, 35626000, 9346277.91, 36504854.76, 11523861.85, 55547065.12, 23433066.08],
+    "products": [4472690, 46313.49, 383199.36, 4414240, 1968157, 661697, 328615.28],  # tonnes
+    "n_content": [3.09, 2.48, 2.11, 3.18, 3.18, 3.04, 3.04],  # %
+}
+
+# Relative uncertainties
+ru_population = 0.20
+ru_slaughtering = 0.10
+ru_products = 0.10
+ru_n_content = 0.10
+
+# ==== Step 2: Create DataFrame ====
+df = pd.DataFrame(data)
+
+# ==== Step 3: Calculate cutability ====
+df["cutability"] = np.where(
+    df["animal"].isin(["chicken", "duck"]),
+    df["products"] / df["slaughtering"],  # same units (tonnes)
+    (df["products"] * 1e3) / df["slaughtering"]  # convert to kg/animal for others
+)
+
+# ==== Step 4: Breeding stock calculation ====
+df["breeding_stock"] = (df["population"] * df["cutability"] * df["n_content"]) / 100  # /100 to scale % to Tg N
+
+# ==== Step 5: Propagate relative uncertainty ====
+df["ru_total"] = np.sqrt(
+    ru_population**2 +
+    ru_slaughtering**2 +
+    ru_products**2 +
+    ru_n_content**2
+)
+
+# ==== Step 6: Absolute uncertainty and CI ====
+df["abs_uncertainty"] = df["breeding_stock"] * df["ru_total"]
+df["lower"] = df["breeding_stock"] - df["abs_uncertainty"]
+df["upper"] = df["breeding_stock"] + df["abs_uncertainty"]
+
+# ==== Step 7: Total breeding stock (convert kg to Tg) ====
+total_sum_kg = df["breeding_stock"].sum()
+total_uncertainty_kg = np.sqrt(np.sum(df["abs_uncertainty"]**2))  # RSS
+
+# Convert to Tg
+total_sum = total_sum_kg / 1e9
+total_uncertainty = total_uncertainty_kg / 1e9
+total_lower = total_sum - total_uncertainty
+total_upper = total_sum + total_uncertainty
+total_ru = total_uncertainty / total_sum * 100
+
+# ==== Step 8: Output ====
+print("=== Breeding Stock by Animal ===")
+df[["breeding_stock", "abs_uncertainty", "lower", "upper"]] = df[["breeding_stock", "abs_uncertainty", "lower", "upper"]] / 1e12
+print(df[["animal", "breeding_stock", "abs_uncertainty", "lower", "upper"]].round(6))
+
+print("\n=== TOTAL BREEDING STOCK N ===")
+print(f"Sum: {total_sum:.6f} Tg N")
+print(f"Uncertainty (±1σ): ±{total_uncertainty:.6f} Tg N")
+print(f"95% Confidence Interval: {total_lower:.6f} – {total_upper:.6f} Tg N")
+print(f"Relative Uncertainty: ±{total_ru:.2f}%")
+
+
+##2019 breeding stock
+import pandas as pd
+import numpy as np
+
+# ==== Step 1: Input updated data ====
+data = {
+    "animal": ["chicken", "duck", "swine", "cow", "buffalo", "goat", "sheep"],
+    "population": [524898000, 33511000, 905549, 50958423, 109851678, 148884786, 74260615],
+    "slaughtering": [2733335000, 33790000, 10125491.1, 41456311.12, 11695507.13, 54981687.64, 23015262.08],
+    "products": [4343702, 43926.85, 415147.12, 5012980, 1996616, 654951, 322754.86],  # in tonnes
+    "n_content": [3.09, 2.48, 2.11, 3.18, 3.18, 3.04, 3.04],  # in %
+}
+
+# Relative uncertainties (as decimals)
+ru_population = 0.20
+ru_slaughtering = 0.10
+ru_products = 0.10
+ru_n_content = 0.10
+
+# ==== Step 2: Create DataFrame ====
+df = pd.DataFrame(data)
+
+# ==== Step 3: Calculate cutability ====
+df["cutability"] = np.where(
+    df["animal"].isin(["chicken", "duck"]),
+    df["products"] / df["slaughtering"],
+    (df["products"] * 1e3) / df["slaughtering"]  # convert tonnes to kg for others
+)
+
+# ==== Step 4: Breeding stock calculation ====
+df["breeding_stock"] = (df["population"] * df["cutability"] * df["n_content"]) / 100  # divide by 100 for %
+
+# ==== Step 5: Propagate relative uncertainty ====
+df["ru_total"] = np.sqrt(
+    ru_population**2 +
+    ru_slaughtering**2 +
+    ru_products**2 +
+    ru_n_content**2
+)
+
+# ==== Step 6: Absolute uncertainty and CI ====
+df["abs_uncertainty"] = df["breeding_stock"] * df["ru_total"]
+df["lower"] = df["breeding_stock"] - df["abs_uncertainty"]
+df["upper"] = df["breeding_stock"] + df["abs_uncertainty"]
+
+# ==== Step 7: Total breeding stock (convert kg to Tg) ====
+total_sum_kg = df["breeding_stock"].sum()
+total_uncertainty_kg = np.sqrt(np.sum(df["abs_uncertainty"]**2))  # RSS
+
+# Convert to Tg
+total_sum = total_sum_kg / 1e9
+total_uncertainty = total_uncertainty_kg / 1e9
+total_lower = total_sum - total_uncertainty
+total_upper = total_sum + total_uncertainty
+total_ru = total_uncertainty / total_sum * 100
+
+# ==== Step 8: Output ====
+print("=== Breeding Stock by Animal ===")
+df[["breeding_stock", "abs_uncertainty", "lower", "upper"]] = df[["breeding_stock", "abs_uncertainty", "lower", "upper"]] / 1e12
+print(df[["animal", "breeding_stock", "abs_uncertainty", "lower", "upper"]].round(6))
+
+print("\n=== TOTAL BREEDING STOCK N ===")
+print(f"Sum: {total_sum:.6f} Tg N")
+print(f"Uncertainty (±1σ): ±{total_uncertainty:.6f} Tg N")
+print(f"95% Confidence Interval: {total_lower:.6f} – {total_upper:.6f} Tg N")
+print(f"Relative Uncertainty: ±{total_ru:.2f}%")
+
+
+#####LIVESTOCK OUTPUTS#####
+###MANURE PRODUCED#####
+
+import numpy as np
+import pandas as pd
+
+# Animal categories
+animals = [
+    "Assess", "Buffalo", "Camel", "Cattle, dairy", "Cattle, Non dairy",
+    "Chickens, broilers", "Chickens, layers", "Ducks", "Goats", "Horses",
+    "Mules and hinnies", "Sheep", "Swine, breeding", "Swine, market"
+]
+
+# Population and excretion factor data
+population = np.array([
+    253500, 109719011, 223810, 51568474, 142913881,
+    476763000, 314269000, 35507000, 150248487, 340000,
+    82984, 68099762, 885211, 7966900
+], dtype=np.float64)
+
+excretion_factor = np.array([
+    92.34, 45, 55, 60, 40,
+    0.73, 0.59, 0.81, 9, 45,
+    92.3, 19.21, 11, 11
+], dtype=np.float64)
+
+# Uncertainties (10%)
+pop_uncertainty = 0.20 * population  ## IPCC(CHAPTER 10)
+ef_uncertainty = 0.10 * excretion_factor
+
+# Manure Produced = Population × Excretion Factor (kg)
+manure_produced_kg = population * excretion_factor
+manure_produced_Tg = manure_produced_kg / 1e9
+
+# Uncertainty propagation
+relative_uncertainty_squared = (pop_uncertainty / population) ** 2 + (ef_uncertainty / excretion_factor) ** 2
+manure_uncertainty_kg = manure_produced_kg * np.sqrt(relative_uncertainty_squared)
+manure_uncertainty_Tg = manure_uncertainty_kg / 1e9
+
+# Total manure and total uncertainty
+total_manure_Tg = manure_produced_Tg.sum()
+total_uncertainty_Tg = np.sqrt(np.sum(manure_uncertainty_Tg**2))
+
+# Partial uncertainty contribution
+total_uncertainty_squared = np.sum(manure_uncertainty_Tg ** 2)
+partial_uncertainties = (manure_uncertainty_Tg ** 2 / total_uncertainty_squared) * 100
+
+# DataFrame
+df = pd.DataFrame({
+    "Animal": animals,
+    "Population": population,
+    "Excretion Factor": excretion_factor,
+    "Manure Produced (Tg)": manure_produced_Tg,
+    "Uncertainty (± Tg)": manure_uncertainty_Tg,
+    "Partial Uncertainty (%)": partial_uncertainties
+})
+
+# Sort by partial uncertainty
+df_sorted = df.sort_values(by="Partial Uncertainty (%)", ascending=False).reset_index(drop=True)
+
+# Display sorted table
+print(df_sorted.to_string(index=False))
+
+# Summary output
+print("\n--- Summary ---")
+print(f"Total manure produced: {total_manure_Tg:.5f} Tg")
+print(f"Total uncertainty in manure produced: ±{total_uncertainty_Tg:.5f} Tg")
+
+
+### MANURE PRODUCED ON PASTURE
+
+import numpy as np
+import pandas as pd
+
+# Animal names matching your table
+animals = [
+    "Assess", "Buffalo", "Camel", "Cattle, dairy", "Cattle, Non dairy",
+    "Chickens, broilers", "Chickens, layers", "Ducks", "Goats", "Horses",
+    "Mules and hinnies", "Sheep", "Swine, breeding", "Swine, market"
+]
+
+# Population and excretion factor
+population = np.array([
+    253500, 109719011, 223810, 51568474, 142913881,
+    476763000, 314269000, 35507000, 150248487, 340000,
+    82984, 68099762, 885211, 7966900
+], dtype=np.float64)
+
+excretion_factor = np.array([
+    92.34, 45, 55, 60, 40,
+    0.73, 0.59, 0.81, 9, 45,
+    92.3, 19.21, 11, 11
+], dtype=np.float64)
+
+# Uncertainty values
+pop_uncertainty = 0.20 * population
+ef_uncertainty = 0.10 * excretion_factor
+
+# Manure produced
+manure_produced_kg = population * excretion_factor
+manure_produced_Tg = manure_produced_kg / 1e9
+rel_uncertainty_sq = (pop_uncertainty / population) ** 2 + (ef_uncertainty / excretion_factor) ** 2
+manure_uncertainty_Tg = manure_produced_Tg * np.sqrt(rel_uncertainty_sq)
+
+# Specific grazing percentages (converted to decimal)
+grazing_percent_dict = {
+    "Cattle, Non dairy": 0.22,
+    "Buffalo": 0.19,
+    "Cattle, dairy": 0.27,
+    "Goats": 0.95,
+    "Sheep": 0.83,
+    "Horses": 0.95,
+    "Assess": 0.95,
+    "Mules and hinnies": 0.95,
+    "Camel": 0.95
+}
+default_grazing = 0.0
+grazing_percentages = np.array([
+    grazing_percent_dict.get(animal, default_grazing) for animal in animals
+], dtype=np.float64)
+
+grazing_percent_uncertainty = 0.20 * grazing_percentages
+
+# Grazing manure and uncertainty
+grazing_manure_Tg = manure_produced_Tg * grazing_percentages
+rel_grazing_uncertainty_sq = rel_uncertainty_sq + (grazing_percent_uncertainty / grazing_percentages) ** 2
+# Avoid division by zero for animals with 0 grazing %
+rel_grazing_uncertainty_sq = np.where(grazing_percentages == 0, 0, rel_grazing_uncertainty_sq)
+grazing_manure_uncertainty_Tg = grazing_manure_Tg * np.sqrt(rel_grazing_uncertainty_sq)
+
+# Total grazing values
+total_grazing_manure_Tg = grazing_manure_Tg.sum()
+total_grazing_uncertainty_Tg = np.sqrt(np.sum(grazing_manure_uncertainty_Tg ** 2))
+
+# Partial uncertainty
+total_grazing_uncertainty_squared = np.sum(grazing_manure_uncertainty_Tg ** 2)
+grazing_partial_uncertainties = np.where(
+    total_grazing_uncertainty_squared == 0,
+    0,
+    (grazing_manure_uncertainty_Tg ** 2 / total_grazing_uncertainty_squared) * 100
+)
+
+# DataFrame
+df = pd.DataFrame({
+    "Animal": animals,
+    "Manure Produced (Tg)": manure_produced_Tg,
+    "Manure on Pasture (Tg)": grazing_manure_Tg,
+    "Pasture Uncertainty (± Tg)": grazing_manure_uncertainty_Tg,
+    "Partial Uncertainty on Pasture (%)": grazing_partial_uncertainties
+})
+
+# Sort and print
+df_sorted = df.sort_values(by="Partial Uncertainty on Pasture (%)", ascending=False).reset_index(drop=True)
+print(df_sorted.to_string(index=False))
+
+# Summary
+print("\n--- Summary ---")
+print(f"Total manure on pasture: {total_grazing_manure_Tg:.5f} Tg")
+print(f"Total uncertainty in pasture manure: ±{total_grazing_uncertainty_Tg:.5f} Tg")
+
+
+### manure produced on agricultural land##
+
+import numpy as np
+import pandas as pd
+
+# Animal categories
+animals = [
+    "Assess", "Buffalo", "Camel", "Cattle, dairy", "Cattle, Non dairy",
+    "Chickens, broilers", "Chickens, layers", "Ducks", "Goats", "Horses",
+    "Mules and hinnies", "Sheep", "Swine, breeding", "Swine, market"
+]
+
+# Population and excretion factors
+population = np.array([
+    253500, 109719011, 223810, 51568474, 142913881,
+    476763000, 314269000, 35507000, 150248487, 340000,
+    82984, 68099762, 885211, 7966900
+], dtype=np.float64)
+
+excretion_factor = np.array([
+    92.34, 45, 55, 60, 40,
+    0.73, 0.59, 0.81, 9, 45,
+    92.3, 19.21, 11, 11
+], dtype=np.float64)
+
+# Uncertainties
+pop_uncertainty = 0.20 * population
+ef_uncertainty = 0.10 * excretion_factor
+
+# Manure produced (Tg)
+manure_produced_kg = population * excretion_factor
+manure_produced_Tg = manure_produced_kg / 1e9
+rel_uncertainty_sq = (pop_uncertainty / population) ** 2 + (ef_uncertainty / excretion_factor) ** 2
+manure_uncertainty_Tg = manure_produced_Tg * np.sqrt(rel_uncertainty_sq)
+
+# Grazing percentages
+grazing_percent_dict = {
+    "Cattle, Non dairy": 0.22,
+    "Buffalo": 0.19,
+    "Cattle, dairy": 0.27,
+    "Goats": 0.95,
+    "Sheep": 0.83,
+    "Horses": 0.95,
+    "Assess": 0.95,
+    "Mules and hinnies": 0.95,
+    "Camel": 0.95
+}
+
+# Assign grazing percentages
+grazing_percentages = np.array([
+    grazing_percent_dict.get(animal, 0.0) for animal in animals
+], dtype=np.float64)
+grazing_percent_uncertainty = 0.20 * grazing_percentages
+
+# Manure on pasture (Tg)
+grazing_manure_Tg = manure_produced_Tg * grazing_percentages
+rel_grazing_uncertainty_sq = rel_uncertainty_sq + np.where(
+    grazing_percentages > 0,
+    (grazing_percent_uncertainty / grazing_percentages) ** 2,
+    0
+)
+grazing_manure_uncertainty_Tg = grazing_manure_Tg * np.sqrt(rel_grazing_uncertainty_sq)
+
+# Manure on agricultural land (Tg)
+manure_agri_Tg = manure_produced_Tg - grazing_manure_Tg
+manure_agri_uncertainty_Tg = np.sqrt(manure_uncertainty_Tg**2 + grazing_manure_uncertainty_Tg**2)
+
+# For animals without grazing, manure_agri = manure_produced
+no_grazing_mask = grazing_percentages == 0
+manure_agri_Tg[no_grazing_mask] = manure_produced_Tg[no_grazing_mask]
+manure_agri_uncertainty_Tg[no_grazing_mask] = manure_uncertainty_Tg[no_grazing_mask]
+
+# Total manure and uncertainty on agricultural land
+total_agri_manure = manure_agri_Tg.sum()
+total_agri_uncertainty = np.sqrt(np.sum(manure_agri_uncertainty_Tg**2))
+
+# Output table
+df = pd.DataFrame({
+    "Animal": animals,
+    "Manure Produced (Tg)": manure_produced_Tg,
+    "Manure on Pasture (Tg)": grazing_manure_Tg,
+    "Manure on Agricultural Land (Tg)": manure_agri_Tg,
+    "Uncertainty (± Tg)": manure_agri_uncertainty_Tg
+})
+
+df_sorted = df.sort_values(by="Manure on Agricultural Land (Tg)", ascending=False).reset_index(drop=True)
+
+# Print table and totals
+print(df_sorted.to_string(index=False))
+print("\n--- Summary ---")
+print(f"Total manure on agricultural land: {total_agri_manure:.3f} Tg")
+print(f"Total uncertainty in agricultural manure: ±{total_agri_uncertainty:.3f} Tg")
+  
+  
+###MANURE TREATED##
+
+import numpy as np
+import pandas as pd
+
+# Animal categories
+animals = [
+    "Assess", "Buffalo", "Camel", "Cattle, dairy", "Cattle, Non dairy",
+    "Chickens, broilers", "Chickens, layers", "Ducks", "Goats", "Horses",
+    "Mules and hinnies", "Sheep", "Swine, breeding", "Swine, market"
+]
+
+# Population and excretion factors
+population = np.array([
+    253500, 109719011, 223810, 51568474, 142913881,
+    476763000, 314269000, 35507000, 150248487, 340000,
+    82984, 68099762, 885211, 7966900
+], dtype=np.float64)
+
+excretion_factor = np.array([
+    92.34, 45, 55, 60, 40,
+    0.73, 0.59, 0.81, 9, 45,
+    92.3, 19.21, 11, 11
+], dtype=np.float64)
+
+# Uncertainties
+pop_uncertainty = 0.20 * population
+ef_uncertainty = 0.10 * excretion_factor
+
+# Manure produced (Tg)
+manure_produced_kg = population * excretion_factor
+manure_produced_Tg = manure_produced_kg / 1e9
+rel_uncertainty_sq = (pop_uncertainty / population) ** 2 + (ef_uncertainty / excretion_factor) ** 2
+manure_uncertainty_Tg = manure_produced_Tg * np.sqrt(rel_uncertainty_sq)
+
+# Treatment percentages
+treated_percent_dict = {
+    "Assess": 0.05, "Buffalo": 0.26, "Camel": 0.05, "Cattle, dairy": 0.22,
+    "Cattle, Non dairy": 0.25, "Chickens, broilers": 0.55, "Chickens, layers": 0.55,
+    "Ducks": 0.55, "Goats": 0.05, "Horses": 0.05, "Mules and hinnies": 0.05,
+    "Sheep": 0.17, "Swine, breeding": 1.00, "Swine, market": 1.00
+}
+treated_percentages = np.array([treated_percent_dict[animal] for animal in animals])
+treated_percent_uncertainty = 0.20 * treated_percentages  # 20% assumed
+
+# Manure treated = manure produced × treatment %
+manure_treated_Tg = manure_produced_Tg * treated_percentages
+
+# Relative uncertainty propagation
+rel_treated_uncertainty_sq = rel_uncertainty_sq + (treated_percent_uncertainty / treated_percentages) ** 2
+manure_treated_uncertainty_Tg = manure_treated_Tg * np.sqrt(rel_treated_uncertainty_sq)
+
+# Total and relative uncertainty
+total_treated = manure_treated_Tg.sum()
+total_treated_uncertainty = np.sqrt(np.sum(manure_treated_uncertainty_Tg ** 2))
+relative_uncertainty = (total_treated_uncertainty / total_treated) * 100
+
+# Output DataFrame
+df = pd.DataFrame({
+    "Animal": animals,
+    "Manure Produced (Tg)": manure_produced_Tg,
+    "Manure Treated (%)": treated_percentages * 100,
+    "Manure Treated (Tg)": manure_treated_Tg,
+    "Uncertainty (± Tg)": manure_treated_uncertainty_Tg
+})
+
+# Sort and print
+df_sorted = df.sort_values(by="Manure Treated (Tg)", ascending=False).reset_index(drop=True)
+print(df_sorted.to_string(index=False))
+
+# Summary
+print("\n--- Summary ---")
+print(f"Total manure treated: {total_treated:.3f} Tg")
+print(f"Total uncertainty in manure treated: ±{total_treated_uncertainty:.3f} Tg")
+print(f"Relative uncertainty (RU): {relative_uncertainty:.2f}%")
+
+
+###MANURE-NH3 EMISSIONS##
+import numpy as np
+import pandas as pd
+
+# Animal list
+animals = [
+    "Assess", "Buffalo", "Camel", "Cattle, dairy", "Cattle, Non dairy",
+    "Chickens, broilers", "Chickens, layers", "Ducks", "Goats", "Horses",
+    "Mules and hinnies", "Sheep", "Swine, breeding", "Swine, market"
+]
+
+# Manure produced (Tg) and uncertainty (from earlier calculation)
+manure_produced_Tg = np.array([
+    0.0234, 4.9374, 0.0123, 3.0941, 5.7166,
+    0.3480, 0.1854, 0.0287, 1.3522, 0.0153,
+    0.0077, 1.3093, 0.0097, 0.0878
+])
+manure_uncertainty_Tg = np.array([
+    0.0047, 0.9886, 0.0025, 0.6188, 1.1436,
+    0.0696, 0.0370, 0.0057, 0.2704, 0.0031,
+    0.0015, 0.2619, 0.0019, 0.0176
+])
+
+# TAN values
+tan_dict = {
+    "Chickens, broilers": 0.70, "Chickens, layers": 0.70, "Ducks": 0.70,
+    "Swine, market": 0.70, "Swine, breeding": 0.70,
+    "Cattle, Non dairy": 0.60, "Cattle, dairy": 0.60,
+    "Buffalo": 0.50, "Goats": 0.50, "Sheep": 0.50,
+    "Horses": 0.60, "Assess": 0.60, "Mules and hinnies": 0.60,
+    "Camel": 0.60
+}
+tan_values = np.array([tan_dict[a] for a in animals])
+tan_uncertainty = 0.10 * tan_values
+
+# % Manure goes to treatment (MMS) – in decimal
+mms_dict = {
+    "Assess": 0.05, "Buffalo": 0.26, "Camel": 0.05,
+    "Cattle, dairy": 0.22, "Cattle, Non dairy": 0.25,
+    "Chickens, broilers": 0.55, "Chickens, layers": 0.55, "Ducks": 0.55,
+    "Goats": 0.05, "Horses": 0.05, "Mules and hinnies": 0.05,
+    "Sheep": 0.17, "Swine, breeding": 0.97, "Swine, market": 0.97
+}
+mms_percent = np.array([mms_dict[a] for a in animals])
+mms_uncertainty = 0.20 * mms_percent
+
+# Emission Factor (EF)
+ef_dict = {
+    "Assess": 0.57, "Buffalo": 0.37, "Camel": 0.36,
+    "Cattle, dairy": 0.40, "Cattle, Non dairy": 0.40,
+    "Chickens, broilers": 0.51, "Chickens, layers": 0.28, "Ducks": 0.48,
+    "Goats": 0.50, "Horses": 0.57, "Mules and hinnies": 0.57,
+    "Sheep": 0.54, "Swine, breeding": 0.52, "Swine, market": 0.53
+}
+ef_values = np.array([ef_dict[a] for a in animals])
+ef_uncertainty = 0.20 * ef_values
+
+# NH3 emission (Tg)
+nh3_emission_Tg = manure_produced_Tg * tan_values * mms_percent * ef_values
+
+# Relative uncertainty for each term
+rel_uncertainty_sq = (
+    (manure_uncertainty_Tg / manure_produced_Tg) ** 2 +
+    (tan_uncertainty / tan_values) ** 2 +
+    (mms_uncertainty / mms_percent) ** 2 +
+    (ef_uncertainty / ef_values) ** 2
+)
+
+# Absolute uncertainty in NH3
+nh3_emission_uncertainty_Tg = nh3_emission_Tg * np.sqrt(rel_uncertainty_sq)
+relative_uncertainty_percent = (nh3_emission_uncertainty_Tg / nh3_emission_Tg) * 100
+
+# Total uncertainty (for partials)
+total_uncertainty_squared = np.sum(nh3_emission_uncertainty_Tg ** 2)
+partial_uncertainty_percent = (nh3_emission_uncertainty_Tg ** 2 / total_uncertainty_squared) * 100
+
+# Final table
+df = pd.DataFrame({
+    "Animal": animals,
+    "NH3 Emission (Tg)": nh3_emission_Tg,
+    "Uncertainty (± Tg)": nh3_emission_uncertainty_Tg,
+    "Relative Uncertainty (%)": relative_uncertainty_percent,
+    "Partial Uncertainty (%)": partial_uncertainty_percent
+})
+
+# Sort and print
+df_sorted = df.sort_values(by="Partial Uncertainty (%)", ascending=False).reset_index(drop=True)
+print(df_sorted.to_string(index=False))
+
+# Total NH3 emission and combined uncertainty
+total_nh3_emission = nh3_emission_Tg.sum()
+total_nh3_uncertainty = np.sqrt(total_uncertainty_squared)
+print("\n--- Summary ---")
+print(f"Total NH3 Emission: {total_nh3_emission:.5f} Tg")
+print(f"Total Uncertainty: ±{total_nh3_uncertainty:.5f} Tg")
+print(f"Relative Uncertainty (RU): {(total_nh3_uncertainty / total_nh3_emission) * 100:.2f}%")
+ 
+ 
+##N2O EMISSIONS
+import numpy as np
+import pandas as pd
+
+# Animal list (camel excluded)
+animals = [
+    "Assess", "Buffalo", "Cattle, dairy", "Cattle, Non dairy",
+    "Chickens, broilers", "Chickens, layers", "Ducks", "Goats", "Horses",
+    "Mules and hinnies", "Sheep", "Swine, breeding", "Swine, market"
+]
+
+# Manure produced (Tg) and its uncertainty (Tg) from earlier calculation
+manure_produced_Tg = np.array([
+    0.0234, 4.9374, 3.0941, 5.7166,
+    0.3480, 0.1854, 0.0287, 1.3522, 0.0153,
+    0.0077, 1.3093, 0.0097, 0.0878
+])
+manure_uncertainty_Tg = np.array([
+    0.0047, 0.9886, 0.6188, 1.1436,
+    0.0696, 0.0370, 0.0057, 0.2704, 0.0031,
+    0.0015, 0.2619, 0.0019, 0.0176
+])
+
+# TAN values and their uncertainty (±10%)
+tan_dict = {
+    "Chickens, broilers": 0.70, "Chickens, layers": 0.70, "Ducks": 0.70,
+    "Swine, market": 0.70, "Swine, breeding": 0.70,
+    "Cattle, Non dairy": 0.60, "Cattle, dairy": 0.60,
+    "Buffalo": 0.50, "Goats": 0.50, "Sheep": 0.50,
+    "Horses": 0.60, "Assess": 0.60, "Mules and hinnies": 0.60
+}
+tan = np.array([tan_dict[a] for a in animals])
+tan_uncertainty = 0.10 * tan
+
+# EF values (kg N2O-N / kg TAN) and ±20% uncertainty
+ef_dict = {
+    "Cattle, Non dairy": 0.02,
+    "Cattle, dairy": 0.02,
+    "Swine, breeding": 0.01,
+    "Swine, market": 0.01,
+    "Sheep": 0.02, "Goats": 0.02,
+    "Horses": 0.02, "Mules and hinnies": 0.02, "Assess": 0.02,
+    "Buffalo": 0.02,
+    "Chickens, broilers": 0.002,
+    "Chickens, layers": 0.002,
+    "Ducks": 0.002
+}
+ef = np.array([ef_dict[a] for a in animals])
+ef_uncertainty = 0.20 * ef
+
+# Manure available for losses (Tg TAN)
+manure_TAN = manure_produced_Tg * tan
+manure_TAN_uncertainty = manure_TAN * np.sqrt(
+    (manure_uncertainty_Tg / manure_produced_Tg) ** 2 +
+    (tan_uncertainty / tan) ** 2
+)
+
+# N2O emissions (kg) and uncertainty (kg)
+n2o_kg = manure_TAN * ef * 1e9
+n2o_uncertainty_kg = n2o_kg * np.sqrt(
+    (manure_TAN_uncertainty / manure_TAN) ** 2 +
+    (ef_uncertainty / ef) ** 2
+)
+
+# Convert to Tg
+n2o_Tg = n2o_kg / 1e9
+n2o_uncertainty_Tg = n2o_uncertainty_kg / 1e9
+
+# Relative uncertainty per animal
+ru_percent = (n2o_uncertainty_Tg / n2o_Tg) * 100
+
+# Partial uncertainty contribution (squared)
+partial_uncertainty_squared = n2o_uncertainty_Tg ** 2
+total_uncertainty_Tg = np.sqrt(np.sum(partial_uncertainty_squared))
+partial_uncertainty_contrib = partial_uncertainty_squared / total_uncertainty_Tg**2 * 100
+
+# Build output DataFrame
+df = pd.DataFrame({
+    "Animal": animals,
+    "N2O Emission (Tg)": n2o_Tg,
+    "Uncertainty (± Tg)": n2o_uncertainty_Tg,
+    "Relative Uncertainty (%)": ru_percent,
+    "Partial Uncertainty Contribution (%)": partial_uncertainty_contrib
+})
+
+# Sort and summarize
+df = df.sort_values(by="N2O Emission (Tg)", ascending=False).reset_index(drop=True)
+total_n2o = n2o_Tg.sum()
+combined_ru = (total_uncertainty_Tg / total_n2o) * 100
+
+# Print results
+print(df.to_string(index=False))
+print("\n--- Summary ---")
+print(f"Total N2O Emission: {total_n2o:.5f} Tg")
+print(f"Combined Uncertainty: ±{total_uncertainty_Tg:.5f} Tg")
+print(f"Combined Relative Uncertainty (RU): {combined_ru:.2f}%")
+
+
+##RUNOFF
+
+import numpy as np
+
+# Input values
+A = 13       # Manure Applied (Tg)
+ΔA = 2.014       # Uncertainty in Applied
+
+B = 4.093        # Manure Treated (Tg)
+ΔB = 0.619       # Uncertainty in Treated
+
+C = 0.08         # Emission Factor
+ΔC = 0.08 * 0.30 # EF uncertainty (30%)
+
+# Runoff calculation
+runoff = (A - B) * C
+
+# Uncertainty propagation: ΔR = sqrt((ΔA)^2 + (ΔB)^2) * C + |A - B| * ΔC
+runoff_unc = np.sqrt(ΔA**2 + ΔB**2) * C + abs(A - B) * ΔC
+
+# Relative uncertainty (optional, for context)
+runoff_rel_unc_percent = (runoff_unc / runoff) * 100
+
+# Output
+print("--- Runoff Summary ---")
+print(f"Runoff: {runoff:.5f} Tg")
+print(f"Uncertainty: ±{runoff_unc:.5f} Tg")
+print(f"Relative Uncertainty: {runoff_rel_unc_percent:.2f}%")
+
+
+##RUNOFF
+import pandas as pd
+import numpy as np
+
+# Constants
+EF = 0.08  # Emission Factor
+EF_unc = 0.08 * 0.30  # ±30%
+
+# Input data
+data = {
+    "Animal": [
+        "Cattle, Non dairy", "Buffalo", "Cattle, dairy",
+        "Chickens, broilers", "Chickens, layers", "Ducks"
+    ],
+    "Manure Applied (Tg)": [4.458913, 3.999258, 2.258699, 0.348037, 0.185419, 0.028761],
+    "Manure Treated (Tg)": [1.429139, 1.283712, 0.680704, 0.191420, 0.101980, 0.015818],
+    "Applied Uncertainty (Tg)": [1.332779, 1.139332, 0.735858, 0.077823, 0.041461, 0.006431],
+    "Treated Uncertainty (Tg)": [0.428742, 0.385114, 0.204211, 0.057426, 0.030594, 0.004746],
+}
+
+# Create DataFrame
+df = pd.DataFrame(data)
+
+# Difference (A - B)
+diff = df["Manure Applied (Tg)"] - df["Manure Treated (Tg)"]
+
+# Runoff (Tg)
+df["Runoff (Tg)"] = diff * EF
+
+# Correct uncertainty propagation
+df["Runoff Abs. Uncertainty (Tg)"] = np.sqrt(
+    (EF * df["Applied Uncertainty (Tg)"]) ** 2 +
+    (EF * df["Treated Uncertainty (Tg)"]) ** 2 +
+    ((df["Manure Applied (Tg)"] - df["Manure Treated (Tg)"]) * EF_unc) ** 2
+)
+
+# Relative uncertainty in %
+df["Runoff Rel. Uncertainty (%)"] = (
+    df["Runoff Abs. Uncertainty (Tg)"] / df["Runoff (Tg)"]
+) * 100
+
+# Print detailed table
+print(df[[
+    "Animal", "Runoff (Tg)", "Runoff Abs. Uncertainty (Tg)", "Runoff Rel. Uncertainty (%)"
+]].to_string(index=False))
+
+# Summary
+total_runoff = df["Runoff (Tg)"].sum()
+total_uncertainty = np.sqrt(np.sum(df["Runoff Abs. Uncertainty (Tg)"] ** 2))
+total_relative_uncertainty = (total_uncertainty / total_runoff) * 100
+
+print("\n--- Summary ---")
+print(f"Total Runoff: {total_runoff:.5f} Tg")
+print(f"Combined Uncertainty: ±{total_uncertainty:.5f} Tg")    
+print(f"Relative Uncertainty (RU): {total_relative_uncertainty:.2f}%")
+
+
+##LEACHING
+import numpy as np
+
+# Given values
+runoff = 0.60611  # Tg
+runoff_unc = 0.19131  # Tg
+EF = 1 / 7  # Emission factor for leaching
+EF_unc = EF * 0.30  # 30% uncertainty
+
+# Leaching calculation
+leaching = runoff * EF
+
+# Uncertainty propagation for multiplication
+rel_runoff_unc = runoff_unc / runoff
+rel_EF_unc = EF_unc / EF
+
+leaching_unc = leaching * np.sqrt(rel_runoff_unc**2 + rel_EF_unc**2)
+
+# Relative uncertainty
+leaching_rel_unc = (leaching_unc / leaching) * 100
+
+# Output results
+print(f"Leaching: {leaching:.5f} Tg")
+print(f"Combined Uncertainty: ±{leaching_unc:.5f} Tg")
+print(f"Relative Uncertainty: {leaching_rel_unc:.2f}%")
+
+
+### MANURE APPLIED ON CROPLAND###
+
+import numpy as np
+
+# Given values
+manure_treated = 4.093
+unc_treated = 0.619
+
+nh3 = 0.95042
+unc_nh3 = 0.16554
+
+n2o = 0.18374
+unc_n2o = 0.02827
+
+leaching = 0.08659
+unc_leaching = 0.03771
+
+runoff = 0.60611
+unc_runoff = 0.19131
+
+# Calculation
+manure_applied = manure_treated - nh3 - n2o - leaching - runoff
+
+# Uncertainty propagation
+total_uncertainty = np.sqrt(
+    unc_treated**2 +
+    unc_nh3**2 +
+    unc_n2o**2 +
+    unc_leaching**2 +
+    unc_runoff**2
+)
+
+# Relative uncertainty
+relative_unc = (total_uncertainty / manure_applied) * 100
+
+# Output
+print(f"Manure Applied on Cropland: {manure_applied:.5f} Tg")
+print(f"Combined Uncertainty: ±{total_uncertainty:.5f} Tg")
+print(f"Relative Uncertainty: {relative_unc:.2f}%")
+
+
+### INPUTS:
+
+##FORAGE---population ( livestock unit head)  --GRASSLAND
+
+
+import pandas as pd
+import numpy as np
+
+# Input data
+data = {
+    "Species": [
+        "Cattle (dairy)", "non-dairy cattle", "buffalo", "sheep", "goat",
+        "ass", "horse", "mule", "camel"
+    ],
+    "Population": [
+        51568474, 36504854.76, 109719011, 68099762,
+        150248487, 253500, 340000, 82984, 223810
+    ],
+    "LUC": [0.55, 0.55, 0.31, 0.04, 0.08, 0, 0, 0, 0]
+}
+
+# Uncertainty levels (fractions)
+popn_unc = 0.20  # ±20%
+luc_unc = 0.10   # ±10%
+
+df = pd.DataFrame(data)
+
+# Calculate Population in Pastoral Region
+df["Pastoral Popn"] = df["Population"] * df["LUC"]
+
+# Relative Uncertainty (same for all species since uncertainty percentages are same)
+df["Rel Unc"] = np.sqrt(popn_unc**2 + luc_unc**2)
+
+# Absolute Uncertainty per species
+df["Abs Unc"] = df["Pastoral Popn"] * df["Rel Unc"]
+
+# Total values
+total_pastoral_popn = df["Pastoral Popn"].sum()
+total_abs_unc = np.sqrt(np.sum(df["Abs Unc"]**2))
+total_rel_unc_percent = (total_abs_unc / total_pastoral_popn) * 100
+
+# Output
+print(df[["Species", "Pastoral Popn", "Abs Unc"]])
+print("\n--- Summary ---")
+print(f"Total Pastoral Population: {total_pastoral_popn:.2f}")
+print(f"Combined Uncertainty: ±{total_abs_unc:.2f}")
+print(f"Relative Uncertainty (RU): {total_rel_unc_percent:.2f}%")
+
+
+###population in pastural region ( livestock unit head)---GRASSLAND
+
+import pandas as pd
+import numpy as np
+
+# Input data
+data = {
+    "Species": [
+        "Cattle (dairy)", "non-dairy cattle", "buffalo", "sheep", "goat",
+        "ass", "horse", "mule", "camel"
+    ],
+    "Population": [
+        51568474, 36504854.76, 109719011, 68099762,
+        150248487, 253500, 340000, 82984, 223810
+    ],
+    "LUC": [0.55, 0.55, 0.31, 0.04, 0.08, 0, 0, 0, 0],
+    "Grazing %": [0.27, 0.22, 0.19, 0.83, 0.95, 0.95, 0.95, 0.95, 0.95]
+}
+
+# Uncertainty values (fractions)
+popn_unc = 0.20  # ±20%
+luc_unc = 0.10    # ±10%
+grazing_unc = 0.20  # ±20%
+
+df = pd.DataFrame(data)
+
+# Compute population in pastoral region per species
+df["Pastoral Popn"] = df["Population"] * df["LUC"] * df["Grazing %"]
+
+# Compute relative uncertainty per species
+df["Rel Unc"] = np.sqrt(
+    popn_unc**2 +
+    luc_unc**2 +
+    grazing_unc**2
+)
+
+# Absolute uncertainty per species
+df["Abs Unc"] = df["Pastoral Popn"] * df["Rel Unc"]
+
+# Total population and combined uncertainty (quadrature sum)
+total_pastoral_popn = df["Pastoral Popn"].sum()
+total_abs_unc = np.sqrt(np.sum(df["Abs Unc"]**2))
+
+# Relative uncertainty (%)
+total_rel_unc_percent = (total_abs_unc / total_pastoral_popn) * 100
+
+# Output
+print(df[["Species", "Pastoral Popn", "Abs Unc"]])
+print("\n--- Summary ---")
+print(f"Total Pastoral Population: {total_pastoral_popn:.2f}")
+print(f"Combined Uncertainty: ±{total_abs_unc:.2f}")
+print(f"Relative Uncertainty (RU): {total_rel_unc_percent:.2f}%")
+
+
+###RUMINANTS IN AGRICULTURAL REGION===0.66 ± 9.37% (0.0627) (CALCULATED)
+### HAYOUTPUT== 3531.94 ± 13.86% (489.5 KG) (CALCUATED)
+
+##INDUSTRIAL MATERIAL
+import numpy as np
+import pandas as pd
+
+# Data
+data = {
+    "Product": ["cowhide", "Buffalo hide", "goat skin", "Sheep skin"],
+    "Mass (tonnes)": [729440, 352886, 101022, 42704],
+    "N-content": [13, 13, 8, 8],
+}
+
+# Constants
+rel_unc_mass = 0.10  # 10%
+rel_unc_n = 0.10     # 10%
+rel_unc_term = np.sqrt(rel_unc_mass**2 + rel_unc_n**2)  # Relative uncertainty in each term
+
+# Create DataFrame
+df = pd.DataFrame(data)
+
+# Calculate product and uncertainties
+df["IM Component"] = df["Mass (tonnes)"] * df["N-content"]
+df["Component Abs. Uncertainty"] = df["IM Component"] * rel_unc_term
+
+# Total IM and total uncertainty
+total_IM = df["IM Component"].sum()
+combined_uncertainty = np.sqrt((df["Component Abs. Uncertainty"] ** 2).sum())
+relative_uncertainty = (combined_uncertainty / total_IM) * 100
+
+# Output
+print(df[["Product", "IM Component", "Component Abs. Uncertainty"]])
+print("\n--- Summary ---")
+print(f"Total Industrial Material (IM): {total_IM:,.0f} tonnes-N")
+print(f"Combined Uncertainty: ±{combined_uncertainty:,.0f} tonnes-N")
+print(f"Relative Uncertainty (RU): {relative_uncertainty:.2f}%")
+
+
+##human consumption of livestock products###
+import numpy as np
+
+# Input values
+population = 1_396_387_127  # people
+livestock_supply = 0.89  # kg N per capita per year
+
+# Uncertainties
+population_unc_percent = 0.05  # ±5%
+livestock_unc_percent = 0.10   # ±10%
+
+# Calculate human consumption
+human_consumption = population * livestock_supply  # in kg N/yr
+
+# Calculate relative uncertainty using root-sum-square (RSS)
+relative_uncertainty = np.sqrt(population_unc_percent**2 + livestock_unc_percent**2)
+
+# Absolute uncertainty
+absolute_uncertainty = human_consumption * relative_uncertainty
+
+# Print results
+print(f"Human Consumption: {human_consumption:,.2f} kg N/yr")
+print(f"Uncertainty: ±{absolute_uncertainty:,.2f} kg N")
+print(f"Relative Uncertainty: {relative_uncertainty * 100:.2f}%")
+
+
+###grassland derived human consumption of livestock products##
+
+import numpy as np
+
+# Data
+species = ['non-dairy cattle', 'buffalo', 'goat', 'sheep']
+products = [0.140549402, 0.062666131, 0.020115577, 0.009989905]
+grazing_percentages = [0.22, 0.19, 0.95, 0.83]
+
+# Constants
+rel_unc_product = 0.10
+rel_unc_grazing = 0.20
+rel_unc_combined = np.sqrt(rel_unc_product**2 + rel_unc_grazing**2)
+
+# Calculations
+gc_values = [p * g for p, g in zip(products, grazing_percentages)]
+gc_uncertainties = [val * rel_unc_combined for val in gc_values]
+
+total_gc = sum(gc_values)
+total_unc = np.sqrt(sum(u**2 for u in gc_uncertainties))
+
+# Output
+print(f"Grassland-derived Human Consumption: {total_gc:.6f}")
+print(f"Combined Uncertainty: ±{total_unc:.6f}")
+print(f"Relative Uncertainty: {total_unc / total_gc * 100:.2f}%")
+
+
+#### human consumption from livestock (combined above two codes)
+import numpy as np
+
+# Input values
+HC = 1242784543.03  # Human Consumption in kg N/yr
+RU_HC = 0.1118      # Relative Uncertainty (11.18%)
+
+GC = 68879000       # Grassland-derived Consumption in kg N/yr
+RU_GC = 0.2236      # Relative Uncertainty (22.36%)
+
+# Absolute uncertainties
+delta_HC = HC * RU_HC
+delta_GC = GC * RU_GC
+
+# Non-grassland human consumption
+non_grassland_HC = HC - GC
+
+# Combined uncertainty (for subtraction, absolute uncertainties add in quadrature)
+delta_non_grassland = np.sqrt(delta_HC**2 + delta_GC**2)
+
+# Relative uncertainty
+RU_non_grassland = delta_non_grassland / non_grassland_HC * 100
+
+# Output
+print(f"Non-Grassland Human Consumption: {non_grassland_HC:.2f} kg N/yr")
+print(f"Combined Uncertainty: ±{delta_non_grassland:.2f} kg N/yr")
+print(f"Relative Uncertainty: {RU_non_grassland:.2f}%")
+
+
+
+###------------CROPLAND inputs###-------------
+
+##IRRIGATION
+import numpy as np
+
+# Given values
+A_SW = 4.598e14  # Area of Surface Water
+A_GW = 3.762e14  # Area of Groundwater
+N_SW = 0.748477371  # N content in Surface Water
+N_GW = 0.811483009  # N content in Groundwater
+
+# Relative uncertainties (10% for all parameters)
+rel_uncertainty = 0.10
+
+# Compute irrigation contributions
+irrigation_SW = A_SW * N_SW
+irrigation_GW = A_GW * N_GW
+irrigation_total = irrigation_SW + irrigation_GW
+
+# Propagate uncertainty for each product
+rel_unc_SW = np.sqrt(rel_uncertainty**2 + rel_uncertainty**2)  # for A_SW * N_SW
+rel_unc_GW = np.sqrt(rel_uncertainty**2 + rel_uncertainty**2)  # for A_GW * N_GW
+
+# Absolute uncertainties
+abs_unc_SW = irrigation_SW * rel_unc_SW
+abs_unc_GW = irrigation_GW * rel_unc_GW
+
+# Total uncertainty propagation (sum of two independent terms)
+total_uncertainty = np.sqrt(abs_unc_SW**2 + abs_unc_GW**2)
+
+# Print results
+print(f"Irrigation Total = {irrigation_total:.3e}")
+print(f"Uncertainty = ±{total_uncertainty:.3e}")
+print(f"Relative Uncertainty = {100 * total_uncertainty / irrigation_total:.2f}%")
+
+
+###DEPOSITION
+# Deposition inputs
+deposition_load = 21.18826027
+area_deposition = 179045076.4
+
+# Uncertainties
+rel_unc_dep = 0.035  # 3.5%
+rel_unc_area = 0.10  # 10%
+
+# Total deposition nitrogen load
+deposition_total = deposition_load * area_deposition
+
+# Propagated relative uncertainty
+rel_unc_deposition = np.sqrt(rel_unc_dep**2 + rel_unc_area**2)
+abs_unc_deposition = deposition_total * rel_unc_deposition
+
+# Print results
+print(f"\nDeposition N Load = {deposition_total:.3e}")
+print(f"Uncertainty = ±{abs_unc_deposition:.3e}")
+print(f"Relative Uncertainty = {100 * abs_unc_deposition / deposition_total:.2f}%")
+
+
+##KITCHEN WASTE
+
+# Kitchen waste inputs
+kitchen_waste = 3.919786292
+n_content_kitchen = 0.013  # 1.3%
+
+# Relative uncertainty
+rel_uncertainty = 0.10
+rel_unc_kitchen = np.sqrt(rel_uncertainty**2 + rel_uncertainty**2)
+
+# Compute nitrogen load from kitchen waste
+kitchen_n_load = kitchen_waste * n_content_kitchen
+kitchen_n_unc = kitchen_n_load * rel_unc_kitchen
+
+# Print results
+print(f"\nKitchen N Load = {kitchen_n_load:.5f}")
+print(f"Uncertainty = ±{kitchen_n_unc:.5f}")
+print(f"Relative Uncertainty = {100 * kitchen_n_unc / kitchen_n_load:.2f}%")
+
+
+###BNF
+
+import numpy as np
+
+# BNF data: (Crop name, Area, BNF rate)
+bnf_data = [
+    ("Rice", 45800, 22),
+    ("Jowar", 4354.460123, 5),
+    ("Bajra", 7361.400416, 5),
+    ("Maize", 7361.400416, 13),
+    ("Wheat", 31100, 13),
+    ("Gram", 8804.909604, 60),
+    ("Tur (Arhar)", 4067.704492, 60),
+    ("Other pulses", 13261.28317, 50),
+    ("Sugarcane", 5455.399112, 40),
+    ("Condiments and Spices", 3907.252419, 5),
+    ("Total Fruits", 10724.53616, 15),
+    # Vegetables omitted (missing area)
+    ("Groundnut", 4579.465943, 80),
+    ("Rapeseed and Mustard", 6046.20824, 5),
+    ("Soyabean", 12917.52591, 80),
+    ("Cotton", 12369.93593, 5),
+    ("Fodder Crops", 8697.275112, 12.25),
+    ("Other category area", 129074.3696, 5)
+]
+
+# Relative uncertainties
+rel_unc_area = 0.10
+rel_unc_bnf_rate = 0.50
+rel_unc_bnf = np.sqrt(rel_unc_area**2 + rel_unc_bnf_rate**2)  # ≈ 50.99%
+
+# Compute BNF and total uncertainty
+bnf_values = []
+bnf_uncertainties_squared = []
+
+for crop, area, rate in bnf_data:
+    bnf = area * rate
+    unc = bnf * rel_unc_bnf
+    bnf_values.append(bnf)
+    bnf_uncertainties_squared.append(unc**2)
+
+# Total BNF and propagated uncertainty
+total_bnf = sum(bnf_values)
+total_unc = np.sqrt(sum(bnf_uncertainties_squared))
+
+# Output
+print(f"Total BNF = {total_bnf:.2f}")
+print(f"Uncertainty = ±{total_unc:.2f}")
+print(f"Relative Uncertainty = {100 * total_unc / total_bnf:.2f}%")
+
+
+##straw recyle
+
+import pandas as pd
+import numpy as np
+
+# === Constants ===
+recycling_ratio = 0.05
+rel_unc_prod = 0.10
+rel_unc_ratio = 0.10
+rel_unc_recycling = 0.33
+rel_unc_crop_factor = 0.10  # ±10% uncertainty in the new parameter
+
+# === Base data from your CSV ===
+data = {
+    'Crop': [
+        'Paddy', 'Wheat', 'Maize', 'Jowar', 'Bajra', 'Barley', 'Sugarcane',
+        'Gram', 'Groundnut', 'Soybean', 'Rapeseed & Mustard', 'Cotton',
+        'Total Pulses', 'Total Oilseeds'
+    ],
+    'Production (Mt)': [
+        132.53, 99.06, 31.65, 4.49, 8.66, 1.78, 405.39,
+        11.22, 8.23, 13.83, 12.74, 37.38, 25.16, 41.07
+    ],
+    'Residue Ratio': [
+        1.5, 1.5, 1.8, 1.8, 1.8, 1.8, 0.3,
+        1.0, 0.3, 0.3, 1.0, 2.0, 1.0, 1.0
+    ]
+}
+
+# Crop-specific multiplication factors from your image (% converted to decimals)
+crop_factor = {
+    'Paddy': 0.0075,
+    'Wheat': 0.0052,
+    'Maize': 0.0058,
+    'Jowar': 0.0072,
+    'Bajra': 0.0072,
+    'Barley': 0.0072,
+    'Sugarcane': 0.0067,
+    'Gram': 0.0010,
+    'Groundnut': 0.0180,
+    'Soybean': 0.0193,
+    'Rapeseed & Mustard': 0.0067,
+    'Cotton': 0.0159,
+    'Total Pulses': 0.0010,
+    'Total Oilseeds': 0.0067
+}
+
+# === DataFrame creation ===
+df = pd.DataFrame(data)
+
+# === Add crop factor column ===
+df['Crop Factor'] = df['Crop'].map(crop_factor)
+
+# === Straw Production ===
+df['Residue (Mt)'] = df['Production (Mt)'] * df['Residue Ratio']
+
+# === Straw Recycled ===
+df['Straw Recycled (Mt)'] = df['Residue (Mt)'] * recycling_ratio
+
+# === Final Product: Multiply by crop factor ===
+df['Final Value (Mt)'] = df['Straw Recycled (Mt)'] * df['Crop Factor']
+
+# === Uncertainty Propagation ===
+rel_unc_residue = np.sqrt(rel_unc_prod**2 + rel_unc_ratio**2)
+rel_unc_straw_recycled = np.sqrt(rel_unc_residue**2 + rel_unc_recycling**2)
+rel_unc_final = np.sqrt(rel_unc_straw_recycled**2 + rel_unc_crop_factor**2)
+
+# === Total and Uncertainty ===
+total_final_value = df['Final Value (Mt)'].sum()
+total_uncertainty = total_final_value * rel_unc_final
+relative_uncertainty_percent = total_uncertainty / total_final_value * 100
+
+# === Output ===
+print(f"✅ Final Crop-wise Adjusted Straw Value = {total_final_value:.4f} Mt")
+print(f"± Uncertainty = ±{total_uncertainty:.4f} Mt")
+print(f"Relative Uncertainty = {relative_uncertainty_percent:.2f}%")
+
+
+##human excretion
+
+import numpy as np
+
+# === Step 1: Rural N Intake Calculation ===
+
+# Inputs
+N_intake = 3.2  # g/day
+total_pop = 1_407_563_842
+rural_pop = 909_384_771
+urban_pop = 498_179_071
+urban_factor = 1.15
+
+# Relative uncertainties
+rel_unc_N = 0.10
+rel_unc_pop = 0.05
+rel_unc_urban_factor = 0.33
+
+# Compute denominator and numerator
+denominator = rural_pop + (urban_factor * urban_pop)
+numerator = N_intake * total_pop
+rural_avg_N_intake = numerator / denominator  # g/day
+
+# Uncertainty of numerator
+rel_unc_num = np.sqrt(rel_unc_N**2 + rel_unc_pop**2)
+
+# Uncertainty of denominator
+urban_term = urban_factor * urban_pop
+rel_rural_frac = rural_pop / denominator
+rel_urban_frac = urban_term / denominator
+
+rel_unc_den = np.sqrt(
+    (rel_unc_pop * rel_rural_frac)**2 +
+    (rel_unc_pop * rel_urban_frac)**2 +
+    (rel_unc_urban_factor * rel_urban_frac)**2
+)
+
+# Total relative uncertainty in rural N intake
+rel_unc_rural_N = np.sqrt(rel_unc_num**2 + rel_unc_den**2)
+
+# Convert g/day to kg/year
+rural_avg_N_intake_kg = rural_avg_N_intake # kg/cap/year
+
+# === Step 2: Disposed N in Fields ===
+
+pop_excrete = 205_992_242  # people
+food_sourced_N = 0.88
+rel_unc_food_N = 0.10
+rel_unc_pop_excrete = 0.10
+
+disposed_N_kg = pop_excrete * rural_avg_N_intake_kg * food_sourced_N
+disposed_N = disposed_N_kg / 1e9  # TgN/year
+
+rel_unc_disposed = np.sqrt(rel_unc_pop_excrete**2 + rel_unc_rural_N**2 + rel_unc_food_N**2)
+abs_unc_disposed = disposed_N * rel_unc_disposed
+
+# === Step 3: NH₃ Emission ===
+
+EF_nh3 = 0.66  # kg NH3/cap/year
+rel_unc_ef = 0.33
+rel_unc_pop = 0.05
+
+nh3_emission_kg = rural_pop * EF_nh3
+nh3_emission_Tg = nh3_emission_kg / 1e9
+
+rel_unc_nh3 = np.sqrt(rel_unc_pop**2 + rel_unc_ef**2)
+abs_unc_nh3 = nh3_emission_Tg * rel_unc_nh3
+
+# === Step 4: Leakage Loss ===
+
+leak_rate = 0.09
+rel_unc_leak = 0.33
+
+rural_excretion_loss = disposed_N * leak_rate
+abs_unc_leakage = rural_excretion_loss * rel_unc_leak
+
+# === Step 5: Final Human Excretion Calculation ===
+
+human_excretion = disposed_N - nh3_emission_Tg - rural_excretion_loss
+abs_unc_total = np.sqrt(abs_unc_disposed**2 + abs_unc_nh3**2 + abs_unc_leakage**2)
+
+# === OUTPUT ===
+print(f"✅ Rural Average N Intake = {rural_avg_N_intake:.4f} g/day")
+print(f"✅ Disposed N in Fields = {disposed_N:.4f} TgN/year ±{abs_unc_disposed:.4f}")
+print(f"✅ Rural NH₃ Emission = {nh3_emission_Tg:.4f} TgN/year ±{abs_unc_nh3:.4f}")
+print(f"✅ Rural Leakage Loss = {rural_excretion_loss:.4f} TgN/year ±{abs_unc_leakage:.4f}")
+print(f"---------------------------------------------")
+print(f"✅ Final Human Excretion = {human_excretion:.4f} TgN/year")
+print(f"± Uncertainty = ±{abs_unc_total:.4f} TgN/year")
+print(f"Relative Uncertainty = {(abs_unc_total / abs(human_excretion)) * 100:.2f}%")
+
+
+##------CROPLAND_OUTPUTS------
+
+## Export of grains
+
+import numpy as np
+import pandas as pd
+
+# === Input Data: (Export in 000 tonnes, N content in fraction) ===
+data = {
+    "Commodity": [
+        "PULSES", "RICE BASMATI", "RICE (OTHER THAN BASMATI)", "WHEAT",
+        "OTHER CEREALS", "FRUITS/VEGETABLE SEEDS", "TEA", "COFFEE",
+        "TOBACCO UNMANUFACTURED", "FLORICULTURE PRODUCTS", "SPICES",
+        "CASHEW", "SESAMUM SEED", "NIGERSEED", "GROUNDNUT",
+        "COTTON RAW INCLUDING WASTE", "JUTE, RAW"
+    ],
+    "Export_000_tonnes": [
+        276.93, 4630.21, 13149.21, 2154.97,
+        3075.66, 32.29, 212.69, 245.21,
+        178.3, 15.7, 1607.06,
+        70.11, 273.26, 19.59, 638.32,
+        1213.98, 30.56
+    ],
+    "N_content_frac": [
+        0.036, 0.012, 0.012, 0.023,
+        0.015, 0.001, 0.018, 0.018,
+        0.001, 0.001, 0.018,
+        0.032, 0.039, 0.039, 0.048,
+        0.007, 0.002
+    ]
+}
+
+df = pd.DataFrame(data)
+
+# === Convert Export from 000 tonnes to tonnes ===
+df["Export_tonnes"] = df["Export_000_tonnes"] * 1e3
+
+# === Calculate N export for each commodity (in tonnes) ===
+df["N_export_tonnes"] = df["Export_tonnes"] * df["N_content_frac"]
+
+# === Convert to TgN (1 Tg = 1e6 tonnes) ===
+df["N_export_Tg"] = df["N_export_tonnes"] / 1e6
+
+# === Relative uncertainty ===
+rel_unc_export = 0.10
+rel_unc_N_content = 0.10
+rel_unc_total = np.sqrt(rel_unc_export**2 + rel_unc_N_content**2)
+
+# === Absolute uncertainty for each commodity ===
+df["abs_unc_Tg"] = df["N_export_Tg"] * rel_unc_total
+
+# === Total N export and uncertainty ===
+total_N_export_Tg = df["N_export_Tg"].sum()
+total_abs_unc_Tg = np.sqrt((df["abs_unc_Tg"]**2).sum())
+
+# === Output ===
+print(f"✅ Total Nitrogen Export = {total_N_export_Tg:.4f} TgN/year")
+print(f"± Uncertainty = ±{total_abs_unc_Tg:.4f} TgN/year")
+print(f"Relative Uncertainty = {(total_abs_unc_Tg / total_N_export_Tg) * 100:.2f}%")
+
+
+##fish feed
+
+import numpy as np
+
+# === Freshwater Fish ===
+fresh_prod = 9_103_989.47     # tonnes
+fresh_N = 0.03
+fresh_FCR = 2.0
+
+# === Aquaculture ===
+aqua_prod = 8_641_286         # tonnes
+aqua_N = 0.0278
+aqua_FCR = 1.66
+
+# === Marine Fish Feed (fixed value) ===
+marine_feed_Tg = 1.8          # Tg/year
+marine_unc_Tg = marine_feed_Tg * 0.10  # 10% uncertainty
+
+# === Relative Uncertainty for calculated feed ===
+rel_unc = 0.10
+combined_unc = np.sqrt(3 * rel_unc**2)  # For product of 3 uncertain variables
+
+# === Freshwater Feed Calculation ===
+fresh_feed = fresh_prod * fresh_N * fresh_FCR  # tonnes
+fresh_unc = fresh_feed * combined_unc
+
+# === Aquaculture Feed Calculation ===
+aqua_feed = aqua_prod * aqua_N * aqua_FCR      # tonnes
+aqua_unc = aqua_feed * combined_unc
+
+# === Total Feed Calculation ===
+# Convert freshwater and aquaculture feed from tonnes to Tg
+fresh_feed_Tg = fresh_feed / 1e6
+aqua_feed_Tg = aqua_feed / 1e6
+
+# Total feed and uncertainty
+total_feed_Tg = fresh_feed_Tg + aqua_feed_Tg + marine_feed_Tg
+total_unc_Tg = np.sqrt((fresh_unc / 1e6)**2 + (aqua_unc / 1e6)**2 + marine_unc_Tg**2)
+
+# === Output ===
+print(f"✅ Freshwater Fish Feed = {fresh_feed_Tg:.4f} Tg/year ±{fresh_unc/1e6:.4f}")
+print(f"✅ Aquaculture Feed     = {aqua_feed_Tg:.4f} Tg/year ±{aqua_unc/1e6:.4f}")
+print(f"✅ Marine Fish Feed     = {marine_feed_Tg:.4f} Tg/year ±{marine_unc_Tg:.4f}")
+print("----------------------------------------------------")
+print(f"✅ Total Fish Feed      = {total_feed_Tg:.4f} Tg/year ±{total_unc_Tg:.4f}")
+print(f"Relative Uncertainty    = {(total_unc_Tg / total_feed_Tg) * 100:.2f}%")
+
+
+##STRAW FATES
+
+import pandas as pd
+import numpy as np
+
+def weighted_mean_and_uncertainty(c_vals, x_vals, std_vals):
+    """
+    Calculates the weighted mean and propagated uncertainty (std dev)
+    c_vals: list of counts [C1, C2, C3]
+    x_vals: list of percentages [x1, x2, x3]
+    std_vals: list of std deviations [σ1, σ2, σ3]
+    """
+    total_weight = sum(c_vals)
+    if total_weight == 0:
+        return np.nan, np.nan
+    
+    weighted_mean = sum(c * x for c, x in zip(c_vals, x_vals)) / total_weight
+    weighted_variance = sum((c**2) * (s**2) for c, s in zip(c_vals, std_vals)) / (total_weight**2)
+    weighted_std = np.sqrt(weighted_variance)
+    return weighted_mean, weighted_std
+
+# 🔽 Upload file if in Colab
+from google.colab import files
+uploaded = files.upload()
+
+# 🔽 Replace with uploaded filename
+filename = list(uploaded.keys())[0]
+df = pd.read_excel(filename)
+
+# Fates to process
+fates = ["ind", "tha", "res", "fod", "fb", "oth"]
+
+# 🔽 Loop over each crop
+for crop in df["Crop"].unique():
+    sub = df[df["Crop"] == crop].iloc[0]
+    
+    # Get counts (C1, C2, C3)
+    C1 = sub.get("c-r1", 0)
+    C2 = sub.get("c-r2", 0)
+    C3 = sub.get("c-r3", 0)
+    C_vals = [C1, C2, C3]
+    
+    print(f"\n📌 Crop: {crop}")
+    print(f"  Counts: C1={C1}, C2={C2}, C3={C3}")
+    
+    for fate in fates:
+        # Get values and standard deviations for R1, R2, R3
+        vals = [sub.get(f"R1-{fate}", 0), sub.get(f"R2-{fate}", 0), sub.get(f"R3-{fate}", 0)]
+        stds = [sub.get(f"R1-{fate}-std", 0), sub.get(f"R2-{fate}-std", 0), sub.get(f"R3-{fate}-std", 0)]
+        
+        mean, std = weighted_mean_and_uncertainty(C_vals, vals, stds)
+        
+        print(f"  ➤ Fate: {fate.upper()} | Mean: {mean:.2f}% | Uncertainty: ±{std:.2f}%")
+
+  
+  ## Residue PRoduced from each crop
+  
+import pandas as pd
+
+# Step 1: Dataset
+data_main = [
+    ["Rice", "Straw", 1.5],
+    ["Rice", "Husk", 0.2],
+    ["Wheat", "Stalk", 1.5],
+    ["Wheat", "pod", 0.3],
+    ["Maize", "Cob", 0.3],
+    ["Maize", "Stalk", 2],
+    ["Mustard", "Stalk", 1.8],
+    ["Sesame", "Stalk", 1.2],
+    ["Soyabean", "Stalk", 1.7],
+    ["Groundnut", "Shell", 0.3],
+    ["Groundnut", "Stalk", 2],
+    ["Sugarcane", "Bagasse", 0.33],
+    ["Sugarcane", "Top and le", 0.05],
+    ["Cotton", "Stalk", 3.8],
+    ["Cotton", "Husk", 1.1],
+    ["Cotton", "Boll Shell", 1.1],
+    ["Jute", "Jute", 3],
+    ["Pulses", "Pulses", 1.55],
+    ["NutriCereals", "Cob", 0.415],
+    ["NutriCereals", "Husk", 0.25],
+    ["NutriCereals", "Stalk", 1.85],
+]
+
+production_lookup = {
+    "Rice": 124.37,
+    "Wheat": 109.59,
+    "Maize": 31.65,
+    "NutriCereals": 51.32,
+    "Pulses": 25.46,
+    "Mustard": 10.21,
+    "Soyabean": 12.61,
+    "Cotton": 5.9925,
+    "Jute": 1.683,
+    "Sugarcane": 405.4,
+    "Groundnut": 10.24,
+}
+
+df_main = pd.DataFrame(data_main, columns=["Crop", "Residue", "Ratio"])
+df_main["Production"] = df_main["Crop"].map(production_lookup)
+df_main["RESIDUE PRODUCTION"] = df_main["Ratio"] * df_main["Production"]
+df_main["RESIDUE PRODUCTION"] = df_main["RESIDUE PRODUCTION"].fillna(0)
+
+# Step 2: N Content % data
+n_content_data = [
+    ["Rice", "Straw", "0.75%"],
+    ["Rice", "Husk", "0.48%"],
+    ["Wheat", "Stalk", "0.52%"],
+    ["Wheat", "pod", "0.41%"],
+    ["Maize", "Cob", "0.71%"],
+    ["Maize", "Stalk", "0.58%"],
+    ["NutriCereals", "Cob", "2.89%"],
+    ["NutriCereals", "Husk", "0.52%"],
+    ["NutriCereals", "Stalk", "0.72%"],
+    ["Groundnut", "Shell", "1%"],
+    ["Groundnut", "Stalk", "1.80%"],
+    ["Soyabean", "Stalk", "1.93%"],
+    ["Mustard", "Stalk", "0.67%"],
+    ["Sugarcane", "Bagasse", "2.70%"],
+    ["Sugarcane", "Top and leaves", "0.67%"],
+    ["Cotton", "Stalk", "1.59%"],
+    ["Cotton", "Husk", "0.57%"],
+    ["Cotton", "Boll Shell", "1.67%"],
+    ["Jute", "Jute", "0.30%"],
+    ["Pulses", "Pulses", "0.10%"],
+]
+
+df_n = pd.DataFrame(n_content_data, columns=["Crop", "Residue", "NPercent"])
+df_n["NPercent"] = df_n["NPercent"].str.replace('%', '').astype(float) / 100
+
+# Step 3: Merge and calculate Straw N Production
+df_final = df_main.merge(df_n, how="left", on=["Crop", "Residue"])
+df_final["Straw_N_Production"] = df_final["RESIDUE PRODUCTION"] * df_final["NPercent"]
+df_final["Straw_N_Production"] = df_final["Straw_N_Production"].fillna(0)
+
+# Step 4: Print full detail table
+print("=== Full Detail Table ===")
+print(df_final[["Crop", "Residue", "RESIDUE PRODUCTION", "NPercent", "Straw_N_Production"]])
+
+# Step 5: Group by Crop and sum Straw N Production
+df_grouped = df_final.groupby("Crop", as_index=False)["Straw_N_Production"].sum()
+
+print("\n=== Grouped by Crop (Sum of Straw N Production) ===")
+print(df_grouped)
+
+
+## straw production uncertanty
+import pandas as pd
+import numpy as np
+
+# Step 1: Input data
+data_main = [
+    ["Rice", "Straw", 1.5],
+    ["Rice", "Husk", 0.2],
+    ["Wheat", "Stalk", 1.5],
+    ["Wheat", "pod", 0.3],
+    ["Maize", "Cob", 0.3],
+    ["Maize", "Stalk", 2],
+    ["Mustard", "Stalk", 1.8],
+    ["Sesame", "Stalk", 1.2],
+    ["Soyabean", "Stalk", 1.7],
+    ["Groundnut", "Shell", 0.3],
+    ["Groundnut", "Stalk", 2],
+    ["Sugarcane", "Bagasse", 0.33],
+    ["Sugarcane", "Top and le", 0.05],
+    ["Cotton", "Stalk", 3.8],
+    ["Cotton", "Husk", 1.1],
+    ["Cotton", "Boll Shell", 1.1],
+    ["Jute", "Jute", 3],
+    ["Pulses", "Pulses", 1.55],
+    ["NutriCereals", "Cob", 0.415],
+    ["NutriCereals", "Husk", 0.25],
+    ["NutriCereals", "Stalk", 1.85],
+]
+
+production_lookup = {
+    "Rice": 124.37,
+    "Wheat": 109.59,
+    "Maize": 31.65,
+    "NutriCereals": 51.32,
+    "Pulses": 25.46,
+    "Mustard": 10.21,
+    "Soyabean": 12.61,
+    "Cotton": 5.9925,
+    "Jute": 1.683,
+    "Sugarcane": 405.4,
+    "Groundnut": 10.24,
+}
+
+n_content_data = [
+    ["Rice", "Straw", "0.75%"],
+    ["Rice", "Husk", "0.48%"],
+    ["Wheat", "Stalk", "0.52%"],
+    ["Wheat", "pod", "0.41%"],
+    ["Maize", "Cob", "0.71%"],
+    ["Maize", "Stalk", "0.58%"],
+    ["NutriCereals", "Cob", "2.89%"],
+    ["NutriCereals", "Husk", "0.52%"],
+    ["NutriCereals", "Stalk", "0.72%"],
+    ["Groundnut", "Shell", "1%"],
+    ["Groundnut", "Stalk", "1.80%"],
+    ["Soyabean", "Stalk", "1.93%"],
+    ["Mustard", "Stalk", "0.67%"],
+    ["Sugarcane", "Bagasse", "2.70%"],
+    ["Sugarcane", "Top and leaves", "0.67%"],
+    ["Cotton", "Stalk", "1.59%"],
+    ["Cotton", "Husk", "0.57%"],
+    ["Cotton", "Boll Shell", "1.67%"],
+    ["Jute", "Jute", "0.30%"],
+    ["Pulses", "Pulses", "0.10%"],
+]
+
+# Step 2: Create DataFrames
+df_main = pd.DataFrame(data_main, columns=["Crop", "Residue", "Ratio"])
+df_main["Production"] = df_main["Crop"].map(production_lookup)
+df_main["RESIDUE PRODUCTION"] = df_main["Ratio"] * df_main["Production"]
+
+df_n = pd.DataFrame(n_content_data, columns=["Crop", "Residue", "NPercent"])
+df_n["NPercent"] = df_n["NPercent"].str.replace('%', '').astype(float) / 100
+
+# Step 3: Merge and calculate Straw N Production
+df_final = df_main.merge(df_n, how="left", on=["Crop", "Residue"])
+df_final["Straw_N_Production"] = df_final["RESIDUE PRODUCTION"] * df_final["NPercent"]
+
+# Step 4: Uncertainty propagation
+# Assuming 10% uncertainty in Production, Ratio, and NPercent
+df_final["u_Prod"] = 0.10 * df_final["Production"]
+df_final["u_Ratio"] = 0.10 * df_final["Ratio"]
+df_final["u_N"] = 0.10 * df_final["NPercent"]
+
+# Propagation of uncertainty for A = P * R * N
+df_final["u_SNP"] = df_final["Straw_N_Production"] * np.sqrt(
+    (df_final["u_Prod"] / df_final["Production"])**2 +
+    (df_final["u_Ratio"] / df_final["Ratio"])**2 +
+    (df_final["u_N"] / df_final["NPercent"])**2
+)
+
+# Step 5: Final total Straw N Production and total uncertainty
+total_SNP = df_final["Straw_N_Production"].sum()
+total_uncertainty = np.sqrt((df_final["u_SNP"]**2).sum())
+
+print(f"Total Straw N Production = {total_SNP:.2f}")
+print(f"Total Uncertainty = ±{total_uncertainty:.2f}")
+
+
+### STRAW FATES--UNCERTAINTY
+
+import pandas as pd
+
+# 1. Straw N production (Tg)
+straw_n_data = {
+    "Cotton": 0.509722,
+    "Groundnut": 0.399360,
+    "Jute": 0.015147,
+    "Maize": 0.434554,
+    "Mustard": 0.123133,
+    "NutriCereals": 1.365805,
+    "Pulses": 0.039463,
+    "Rice": 1.518558,
+    "Sesame": 0.000000,
+    "Soyabean": 0.413734,
+    "Sugarcane": 3.612114,
+    "Wheat": 0.989598
+}
+
+# 2. Fate data per crop
+fate_lookup = {
+    "Rice": {
+        "IND": (8.80, 19.05), "THA": (7.72, 14.84), "RES": (9.51, 12.69),
+        "FOD": (60.63, 27.29), "FB": (4.77, 13.67), "OTH": (8.68, 14.66)
+    },
+    "Sugarcane": {
+        "IND": (6.42, 14.43), "THA": (7.49, 8.81), "RES": (15.56, 11.31),
+        "FOD": (37.23, 20.46), "FB": (12.22, 22.22), "OTH": (21.12, 25.26)
+    },
+    "Cotton": {
+        "IND": (3.16, 12.14), "THA": (0.48, 2.42), "RES": (28.82, 28.58),
+        "FOD": (8.64, 19.33), "FB": (52.17, 32.10), "OTH": (6.73, 16.69)
+    },
+    "Groundnut": {
+        "IND": (3.26, 12.66), "THA": (0.04, 0.41), "RES": (6.55, 16.92),
+        "FOD": (84.91, 24.89), "FB": (1.04, 7.12), "OTH": (4.19, 13.95)
+    },
+    "Jute": {
+        "IND": (27.77, 26.45), "THA": (6.33, 13.93), "RES": (40.83, 32.85),
+        "FOD": (19.43, 30.89), "FB": (0.47, 1.80), "OTH": (5.17, 12.68)
+    },
+    "Maize": {
+        "IND": (8.05, 19.21), "THA": (0.92, 6.51), "RES": (30.44, 31.55),
+        "FOD": (46.71, 33.49), "FB": (9.53, 20.16), "OTH": (5.65, 16.23)
+    },
+    "Wheat": {
+        "IND": (1.32, 7.68), "THA": (3.55, 4.78), "RES": (10.81, 12.18),
+        "FOD": (73.97, 21.60), "FB": (4.84, 14.18), "OTH": (5.51, 8.95)
+    },
+    "Pulses": {
+        "IND": (5.55, 18.16), "THA": (2.33, 9.04), "RES": (19.63, 35.84),
+        "FOD": (58.09, 45.00), "FB": (5.41, 20.42), "OTH": (9.00, 25.26)
+    },
+    "NutriCereals": {
+        "IND": (2.65, 8.84), "THA": (1.72, 7.49), "RES": (1.82, 6.54),
+        "FOD": (84.11, 20.30), "FB": (6.14, 13.94), "OTH": (3.57, 10.20)
+    },
+    "Soyabean": {
+        "IND": (13.80, 33.80), "THA": (1.60, 7.10), "RES": (17.60, 36.20),
+        "FOD": (37.40, 47.10), "FB": (12.10, 31.30), "OTH": (17.50, 36.80)
+    },
+    "Mustard": {
+        "IND": (13.80, 33.80), "THA": (1.60, 7.10), "RES": (17.60, 36.20),
+        "FOD": (37.40, 47.10), "FB": (12.10, 31.30), "OTH": (17.50, 36.80)
+    }
+}
+
+# 3. Relative uncertainty in Straw N production
+straw_n_rel_unc = 0.0764
+
+# 4. Fate-wise allocation function
+def allocate_fate_n(crop, total_n_tg):
+    results = []
+    fates = fate_lookup.get(crop)
+    if not fates:
+        return results
+
+    for fate, (mean_pct, fate_unc) in fates.items():
+        frac = mean_pct / 100
+        fate_unc_rel = fate_unc / 100
+
+        n_to_fate = total_n_tg * frac
+        combined_rel_unc = (straw_n_rel_unc**2 + fate_unc_rel**2)**0.5
+        abs_unc_tg = n_to_fate * combined_rel_unc
+
+        results.append({
+            "Crop": crop,
+            "Fate": fate,
+            "Straw N to Fate (Tg)": round(n_to_fate, 4),
+            "±Uncertainty (Tg)": round(abs_unc_tg, 4),
+            "Relative Uncertainty (%)": round(combined_rel_unc * 100, 2)
+        })
+    return results
+
+# 5. Run across all crops
+final_results = []
+for crop, n_tg in straw_n_data.items():
+    final_results.extend(allocate_fate_n(crop, n_tg))
+
+# 6. To DataFrame
+df_fate_output = pd.DataFrame(final_results)
+
+# 7. Sort to group by Fate: IND first, then THA, RES, FOD, FB, OTH
+fate_order = ["IND", "THA", "RES", "FOD", "FB", "OTH"]
+df_fate_output["Fate"] = pd.Categorical(df_fate_output["Fate"], categories=fate_order, ordered=True)
+df_fate_output = df_fate_output.sort_values(by=["Fate", "Crop"]).reset_index(drop=True)
+
+print(df_fate_output.to_string(index=False))
+
+	   
+	### extended the above code :
+	import pandas as pd
+import numpy as np
+
+# 1. Straw N production (Tg)
+straw_n_data = {
+    "Cotton": 0.509722,
+    "Groundnut": 0.399360,
+    "Jute": 0.015147,
+    "Maize": 0.434554,
+    "Mustard": 0.123133,
+    "NutriCereals": 1.365805,
+    "Pulses": 0.039463,
+    "Rice": 1.518558,
+    "Sesame": 0.000000,
+    "Soyabean": 0.413734,
+    "Sugarcane": 3.612114,
+    "Wheat": 0.989598
+}
+
+# 2. Fate data per crop
+fate_lookup = {
+    "Rice": {"IND": (8.80, 19.05), "THA": (7.72, 14.84), "RES": (9.51, 12.69),
+             "FOD": (60.63, 27.29), "FB": (4.77, 13.67), "OTH": (8.68, 14.66)},
+    "Sugarcane": {"IND": (6.42, 14.43), "THA": (7.49, 8.81), "RES": (15.56, 11.31),
+                  "FOD": (37.23, 20.46), "FB": (12.22, 22.22), "OTH": (21.12, 25.26)},
+    "Cotton": {"IND": (3.16, 12.14), "THA": (0.48, 2.42), "RES": (28.82, 28.58),
+               "FOD": (8.64, 19.33), "FB": (52.17, 32.10), "OTH": (6.73, 16.69)},
+    "Groundnut": {"IND": (3.26, 12.66), "THA": (0.04, 0.41), "RES": (6.55, 16.92),
+                  "FOD": (84.91, 24.89), "FB": (1.04, 7.12), "OTH": (4.19, 13.95)},
+    "Jute": {"IND": (27.77, 26.45), "THA": (6.33, 13.93), "RES": (40.83, 32.85),
+             "FOD": (19.43, 30.89), "FB": (0.47, 1.80), "OTH": (5.17, 12.68)},
+    "Maize": {"IND": (8.05, 19.21), "THA": (0.92, 6.51), "RES": (30.44, 31.55),
+              "FOD": (46.71, 33.49), "FB": (9.53, 20.16), "OTH": (5.65, 16.23)},
+    "Wheat": {"IND": (1.32, 7.68), "THA": (3.55, 4.78), "RES": (10.81, 12.18),
+              "FOD": (73.97, 21.60), "FB": (4.84, 14.18), "OTH": (5.51, 8.95)},
+    "Pulses": {"IND": (5.55, 18.16), "THA": (2.33, 9.04), "RES": (19.63, 35.84),
+               "FOD": (58.09, 45.00), "FB": (5.41, 20.42), "OTH": (9.00, 25.26)},
+    "NutriCereals": {"IND": (2.65, 8.84), "THA": (1.72, 7.49), "RES": (1.82, 6.54),
+                     "FOD": (84.11, 20.30), "FB": (6.14, 13.94), "OTH": (3.57, 10.20)},
+    "Soyabean": {"IND": (13.80, 33.80), "THA": (1.60, 7.10), "RES": (17.60, 36.20),
+                 "FOD": (37.40, 47.10), "FB": (12.10, 31.30), "OTH": (17.50, 36.80)},
+    "Mustard": {"IND": (13.80, 33.80), "THA": (1.60, 7.10), "RES": (17.60, 36.20),
+                "FOD": (37.40, 47.10), "FB": (12.10, 31.30), "OTH": (17.50, 36.80)}
+}
+
+# 3. Relative uncertainty in Straw N production
+straw_n_rel_unc = 0.0764
+
+# 4. Fate-wise allocation function
+def allocate_fate_n(crop, total_n_tg):
+    results = []
+    fates = fate_lookup.get(crop)
+    if not fates:
+        return results
+
+    for fate, (mean_pct, fate_unc) in fates.items():
+        frac = mean_pct / 100
+        fate_unc_rel = fate_unc / 100
+
+        n_to_fate = total_n_tg * frac
+        combined_rel_unc = (straw_n_rel_unc**2 + fate_unc_rel**2)**0.5
+        abs_unc_tg = n_to_fate * combined_rel_unc
+
+        results.append({
+            "Crop": crop,
+            "Fate": fate,
+            "Straw N to Fate (Tg)": round(n_to_fate, 4),
+            "±Uncertainty (Tg)": round(abs_unc_tg, 4),
+            "Relative Uncertainty (%)": round(combined_rel_unc * 100, 2)
+        })
+    return results
+
+# 5. Run across all crops
+final_results = []
+for crop, n_tg in straw_n_data.items():
+    final_results.extend(allocate_fate_n(crop, n_tg))
+
+# 6. To DataFrame
+df_fate_output = pd.DataFrame(final_results)
+
+# 7. Sort by Fate and Crop
+fate_order = ["IND", "THA", "RES", "FOD", "FB", "OTH"]
+df_fate_output["Fate"] = pd.Categorical(df_fate_output["Fate"], categories=fate_order, ordered=True)
+df_fate_output = df_fate_output.sort_values(by=["Fate", "Crop"]).reset_index(drop=True)
+
+# === PRINT TABLE 1 ===
+print("\n=== Table 1: Fate-wise Straw N Allocation per Crop ===")
+print(df_fate_output.to_string(index=False))
+
+# === TABLE 2: SUM AND PROPAGATED UNCERTAINTY PER FATE ===
+summary = df_fate_output.groupby("Fate").agg(
+    Total_N_Tg=("Straw N to Fate (Tg)", "sum"),
+    # Propagated uncertainty using RSS (root-sum-square) method:
+    Total_Abs_Uncertainty_Tg=("±Uncertainty (Tg)", lambda x: np.sqrt((x**2).sum()))
+)
+summary["Relative Uncertainty (%)"] = 100 * summary["Total_Abs_Uncertainty_Tg"] / summary["Total_N_Tg"]
+summary = summary.reset_index()
+
+# Round results
+summary = summary.round({
+    "Total_N_Tg": 4,
+    "Total_Abs_Uncertainty_Tg": 4,
+    "Relative Uncertainty (%)": 2
+})
+
+# === PRINT TABLE 2 ===
+print("\n=== Table 2: Total Straw N by Fate with Propagated Uncertainty ===")
+print(summary.to_string(index=False))
+
+
+ ####CROPLAND EMISSIONS--------
+ 
+ ##NH3 EMISSIONS (VOLATILIZATION)
+ import numpy as np
+
+# Input data (values in TgN, EF in kg NH3/kg N)
+data = {
+    "Fertilizer":     {"value": 20.4,  "rel_unc_v": 0.10,  "ef": 0.128, "rel_unc_ef": 0.25},
+    "Human":          {"value": 0.0,   "rel_unc_v": 2.38,  "ef": 0.08,  "rel_unc_ef": 0.10},
+    "Deposition":     {"value": 3.79,  "rel_unc_v": 0.11,  "ef": 0.15,  "rel_unc_ef": 0.33},
+    "Irrigation":     {"value": 0.65,  "rel_unc_v": 0.10,  "ef": 0.15,  "rel_unc_ef": 0.33},
+    "BNF":            {"value": 5.69,  "rel_unc_v": 0.1732,"ef": 0.01,  "rel_unc_ef": 0.33},
+    "Livestock":      {"value": 2.28,  "rel_unc_v": 0.295, "ef": 0.55,  "rel_unc_ef": 0.20},
+}
+
+total_emission = 0
+total_variance = 0
+
+print("🔹 Component-wise NH₃ Emissions:\n")
+
+for key, item in data.items():
+    v, uv = item["value"], item["rel_unc_v"]
+    ef, uef = item["ef"], item["rel_unc_ef"]
+    
+    emission = v * ef
+    rel_unc = np.sqrt(uv**2 + uef**2)
+    abs_unc = emission * rel_unc
+    
+    total_emission += emission
+    total_variance += abs_unc**2
+    
+    print(f"{key:<12}: Emission = {emission:.4f} Tg NH₃ ±{abs_unc:.4f} ({rel_unc*100:.2f}%)")
+
+# Total
+total_unc = np.sqrt(total_variance)
+rel_unc_total = (total_unc / total_emission) * 100
+
+print("\n🔸 Total NH₃ Emission:")
+print(f"✅ NH₃ = {total_emission:.4f} Tg NH₃/year ±{total_unc:.4f}")
+print(f"Relative Uncertainty = {rel_unc_total:.2f}%")
+
+
+## BIOMASS BURNING EMISSIONS
+
+import pandas as pd
+import numpy as np
+
+# Step 1: Dataset
+data_main = [
+    ["Rice", "Straw", 1.5],
+    ["Rice", "Husk", 0.2],
+    ["Wheat", "Stalk", 1.5],
+    ["Wheat", "pod", 0.3],
+    ["Maize", "Cob", 0.3],
+    ["Maize", "Stalk", 2],
+    ["Mustard", "Stalk", 1.8],
+    ["Sesame", "Stalk", 1.2],
+    ["Soyabean", "Stalk", 1.7],
+    ["Groundnut", "Shell", 0.3],
+    ["Groundnut", "Stalk", 2],
+    ["Sugarcane", "Bagasse", 0.33],
+    ["Sugarcane", "Top and le", 0.05],
+    ["Cotton", "Stalk", 3.8],
+    ["Cotton", "Husk", 1.1],
+    ["Cotton", "Boll Shell", 1.1],
+    ["Jute", "Jute", 3],
+    ["Pulses", "Pulses", 1.55],
+    ["NutriCereals", "Cob", 0.415],
+    ["NutriCereals", "Husk", 0.25],
+    ["NutriCereals", "Stalk", 1.85],
+]
+
+production_lookup = {
+    "Rice": 124.37,
+    "Wheat": 109.59,
+    "Maize": 31.65,
+    "NutriCereals": 51.32,
+    "Pulses": 25.46,
+    "Mustard": 10.21,
+    "Soyabean": 12.61,
+    "Cotton": 5.9925,
+    "Jute": 1.683,
+    "Sugarcane": 405.4,
+    "Groundnut": 10.24,
+    "Sesame": 1.0  # assumed
+}
+
+# Step 2: Create DataFrame
+df = pd.DataFrame(data_main, columns=["Crop", "Residue", "ResidueRatio"])
+df["Production"] = df["Crop"].map(production_lookup)
+
+# Step 3: Calculate Residue Production and uncertainty
+df["ResidueProduction"] = df["ResidueRatio"] * df["Production"]
+
+# Combined relative uncertainty: √(0.1² + 0.2²) ≈ 0.2236 (22.36%)
+combined_uncertainty = 0.2236
+df["ResidueProd_Lower"] = df["ResidueProduction"] * (1 - combined_uncertainty)
+df["ResidueProd_Upper"] = df["ResidueProduction"] * (1 + combined_uncertainty)
+
+# Step 4: Crop-wise totals
+df_cropwise = df.groupby("Crop").agg(
+    CropProduction=("Production", "first"),  # same across crop rows
+    TotalResidueProd=("ResidueProduction", "sum"),
+    ResidueProd_Lower=("ResidueProd_Lower", "sum"),
+    ResidueProd_Upper=("ResidueProd_Upper", "sum")
+).reset_index()
+
+df_cropwise["Prod_Lower"] = df_cropwise["CropProduction"] * (1 - 0.1)
+df_cropwise["Prod_Upper"] = df_cropwise["CropProduction"] * (1 + 0.1)
+
+# Step 5: Grand totals
+total_prod = df_cropwise["CropProduction"].sum()
+total_prod_low = df_cropwise["Prod_Lower"].sum()
+total_prod_high = df_cropwise["Prod_Upper"].sum()
+
+total_residue = df_cropwise["TotalResidueProd"].sum()
+total_residue_low = df_cropwise["ResidueProd_Lower"].sum()
+total_residue_high = df_cropwise["ResidueProd_Upper"].sum()
+
+# Step 6: Output
+print("=== Crop-wise Residue and Production with Uncertainty ===")
+print(df_cropwise[[
+    "Crop", "CropProduction", "Prod_Lower", "Prod_Upper",
+    "TotalResidueProd", "ResidueProd_Lower", "ResidueProd_Upper"
+]])
+
+print("\n=== Total Values with Combined Uncertainty ===")
+print(f"Total Production: {total_prod:.2f} ({total_prod_low:.2f} – {total_prod_high:.2f})")
+print(f"Total Residue Production: {total_residue:.2f} ({total_residue_low:.2f} – {total_residue_high:.2f})")
+
+
+##BIOMASS BURNING EMISSIONS
+import pandas as pd
+import numpy as np
+
+# === Step 1: Input data ===
+data = [
+    ["Rice",        2.11429E+11, 0.04772717, 0.89, 0.84, 2.17, 3.11, 0.1],
+    ["Wheat",       1.97262E+11, 0.04843,    0.86, 0.83, 2.17, 3.11, 0.1],
+    ["Maize",       7.2795E+10,  0.09529412, 0.92, 0.40, 2.17, 3.11, 0.1],
+    ["Nutricereals",1.2907E+11,  0.0613888,  0.90, 0.83, 2.17, 3.11, 0.1],
+    ["Gram",        3.9463E+10,  0.021,      0.60, 0.20, 2.17, 3.11, 0.1],
+    ["Groundnut",   2.3552E+10,  0.010351,   0.90, 0.85, 2.17, 3.11, 0.1],
+    ["Soyabean",    2.1437E+10,  0.121,      0.82, 0.85, 2.17, 3.11, 0.1],
+    ["Mustard",     1.8378E+10,  0.121,      0.82, 0.85, 2.17, 3.11, 0.1],
+    ["Sugarcane",   1.54052E+11, 0.1221509,  0.68, 0.71, 2.17, 3.11, 0.1],
+    ["Cotton",      3.5955E+10,  0.5217003,  0.90, 0.85, 2.17, 3.11, 0.1],
+]
+
+columns = ["Crop", "ResidueProd", "SurplusFrac", "BurnEff", "DryMatterFrac", "EF_NH3", "EF_NOx", "EF_N2O"]
+df = pd.DataFrame(data, columns=columns)
+
+# === Step 2: Define relative uncertainties ===
+unc = {
+    "ResidueProd": 0.2236,    # 22.36%
+    "SurplusFrac": 0.20,      # 20%
+    "BurnEff": 0.10,          # 10%
+    "DryMatterFrac": 0.10,    # 10%
+    "EF_NH3": 0.585,          # 58.5%
+    "EF_NOx": 0.505,          # 50.5%
+    "EF_N2O": 0.10            # 10%
+}
+
+# === Step 3: Combine uncertainties ===
+def combined_uncertainty(*args):
+    return np.sqrt(sum(a**2 for a in args))
+
+unc_total_nh3 = combined_uncertainty(unc["ResidueProd"], unc["SurplusFrac"], unc["BurnEff"], unc["DryMatterFrac"], unc["EF_NH3"])
+unc_total_nox = combined_uncertainty(unc["ResidueProd"], unc["SurplusFrac"], unc["BurnEff"], unc["DryMatterFrac"], unc["EF_NOx"])
+unc_total_n2o = combined_uncertainty(unc["ResidueProd"], unc["SurplusFrac"], unc["BurnEff"], unc["DryMatterFrac"], unc["EF_N2O"])
+
+# === Step 4: Compute emissions and uncertainty bounds ===
+def compute_emission(row, ef_col, unc_total):
+    base = row["ResidueProd"] * row["SurplusFrac"] * row["BurnEff"] * row["DryMatterFrac"] * row[ef_col]
+    lower = base * (1 - unc_total)
+    upper = base * (1 + unc_total)
+    return pd.Series([base / 1e12, lower / 1e12, upper / 1e12])  # convert to Tg
+
+df[["NH3_Tg", "NH3_Lower_Tg", "NH3_Upper_Tg"]] = df.apply(lambda r: compute_emission(r, "EF_NH3", unc_total_nh3), axis=1)
+df[["NOx_Tg", "NOx_Lower_Tg", "NOx_Upper_Tg"]] = df.apply(lambda r: compute_emission(r, "EF_NOx", unc_total_nox), axis=1)
+df[["N2O_Tg", "N2O_Lower_Tg", "N2O_Upper_Tg"]] = df.apply(lambda r: compute_emission(r, "EF_N2O", unc_total_n2o), axis=1)
+
+# === Step 5: Display crop-wise summary in Tg ===
+print("=== Crop-wise Emissions and Uncertainty (Tg) ===")
+print(df[[
+    "Crop",
+    "NH3_Tg", "NH3_Lower_Tg", "NH3_Upper_Tg",
+    "NOx_Tg", "NOx_Lower_Tg", "NOx_Upper_Tg",
+    "N2O_Tg", "N2O_Lower_Tg", "N2O_Upper_Tg"
+]])
+
+# === Step 6: Total emissions in Tg ===
+totals = {
+    "NH3": (df["NH3_Tg"].sum(), df["NH3_Lower_Tg"].sum(), df["NH3_Upper_Tg"].sum()),
+    "NOx": (df["NOx_Tg"].sum(), df["NOx_Lower_Tg"].sum(), df["NOx_Upper_Tg"].sum()),
+    "N2O": (df["N2O_Tg"].sum(), df["N2O_Lower_Tg"].sum(), df["N2O_Upper_Tg"].sum())
+}
+
+print("\n=== Total Emissions Across All Crops (Tg) ===")
+for gas, (mid, low, high) in totals.items():
+    print(f"{gas}: {mid:.4f} Tg (range: {low:.4f} – {high:.4f} Tg)")
+
+## N2-N Biomass burning
+Value=0.65
+Uncertainty= 22.97%
+= 0.65 Tg ± 22.97%
+→ Range: 0.5007 – 0.7993 Tg
+
+### NO EMISSIONS:
+
+import numpy as np
+
+# Set seed for reproducibility
+np.random.seed(42)
+
+# Define input table with point estimates and uncertainties
+sources = {
+    "Fertilizer": {
+        "value": 20.4, "val_unc": 0.10,
+        "ef": 0.0007, "ef_unc_low": 0.125, "ef_unc_high": 2.06
+    },
+    "Deposition": {
+        "value": 3.79, "val_unc": 0.11,
+        "ef": 0.04, "ef_unc_low": 0.10, "ef_unc_high": 0.10
+    },
+    "Irrigation": {
+        "value": 0.65, "val_unc": 0.10,
+        "ef": 0.04, "ef_unc_low": 0.10, "ef_unc_high": 0.10
+    },
+    "Manure": {
+        "value": 2.28, "val_unc": 0.295,
+        "ef": 0.04, "ef_unc_low": 0.125, "ef_unc_high": 2.06
+    },
+    "Human Excretion": {
+        "value": 0.0, "val_unc": 2.38,
+        "ef": 0.04, "ef_unc_low": 0.125, "ef_unc_high": 2.06
+    }
+}
+
+# Number of Monte Carlo samples
+n_samples = 10000
+no_samples = []
+
+# Simulation loop
+for _ in range(n_samples):
+    total_no = 0
+    for source, params in sources.items():
+        # Sample value from normal distribution (clip at 0)
+        value = max(np.random.normal(params["value"], params["value"] * params["val_unc"]), 0)
+
+        # Sample EF from lognormal fit based on asymmetric CI
+        ef_low = params["ef"] * (1 - params["ef_unc_low"])
+        ef_high = params["ef"] * (1 + params["ef_unc_high"])
+        sigma = (np.log(ef_high) - np.log(ef_low)) / (2 * 1.96)
+        mu = np.log(params["ef"])
+        ef_sample = np.random.lognormal(mu, sigma)
+
+        # Contribution to total NO
+        total_no += value * ef_sample
+
+    no_samples.append(total_no)
+
+# Convert samples to array
+samples = np.array(no_samples)
+
+# Summary stats
+mean_no = np.mean(samples)
+median_no = np.median(samples)
+lower_ci = np.percentile(samples, 2.5)
+upper_ci = np.percentile(samples, 97.5)
+
+# Relative uncertainty
+ru_low = ((mean_no - lower_ci) / mean_no) * 100
+ru_high = ((upper_ci - mean_no) / mean_no) * 100
+
+# Output
+print("=== NO Emission Estimate (Monte Carlo, 95% CI) ===")
+print(f"Mean NO: {mean_no:.4f} kg N")
+print(f"Median NO: {median_no:.4f} kg N")
+print(f"95% Confidence Interval: {lower_ci:.4f} – {upper_ci:.4f} kg N")
+print(f"Relative Uncertainty: -{ru_low:.2f}% / +{ru_high:.2f}%")
+
+
+N2O EMISSION--MONTE CARLO
+import numpy as np
+
+# Seed for reproducibility
+np.random.seed(42)
+
+# Number of Monte Carlo samples
+n_samples = 10000
+
+# Define inputs with central values and uncertainties
+params = {
+    'FER': (20.4, 0.10),
+    'MAN': (2.28, 0.295),
+    'DEP': (3.79, 0.11),
+    'IRRI': (0.65, 0.10),
+    'BNF': (5.69, 0.1732),
+    'EF1': (0.007, 0.10),
+    'EF2a': (0.005, 0.10),
+    'EF2b': (0.005, 0.10),
+    'EF_manure': (0.01, 0.80),
+    'FRAC_gasF': (0.15, 0.10),
+    'FRAC_leach': (0.10, 0.10),
+}
+
+# Asymmetric uncertainty for FRAC_gasM (mean = 0.20, bounds = 0.0 to 0.31)
+frac_gasM_min = 0.0
+frac_gasM_max = 0.31
+
+# Generate samples
+samples = {}
+for key, (mean, rel_unc) in params.items():
+    std_dev = mean * rel_unc
+    samples[key] = np.clip(np.random.normal(mean, std_dev, n_samples), 0, None)
+
+# Handle asymmetric uncertainty for FRAC_gasM using uniform distribution
+samples['FRAC_gasM'] = np.random.uniform(frac_gasM_min, frac_gasM_max, n_samples)
+
+# Compute N2O emissions for each sample
+N2O_samples = (
+    (samples['FER'] - samples['FER'] * samples['FRAC_gasF']) * samples['EF1'] +
+    (samples['FER'] * samples['FRAC_gasF'] * samples['EF2a']) +
+    (samples['FER'] * samples['FRAC_leach'] * samples['EF2b']) +
+    ((samples['MAN'] - samples['MAN'] * samples['FRAC_gasM']) * samples['EF_manure']) +
+    (samples['DEP'] * samples['EF1']) +
+    (samples['IRRI'] * samples['EF1']) +
+    (samples['BNF'] * samples['EF_manure'])
+)
+
+# Calculate statistics
+mean_n2o = np.mean(N2O_samples)
+median_n2o = np.median(N2O_samples)
+lower_ci = np.percentile(N2O_samples, 2.5)
+upper_ci = np.percentile(N2O_samples, 97.5)
+ru_low = (mean_n2o - lower_ci) / mean_n2o * 100
+ru_high = (upper_ci - mean_n2o) / mean_n2o * 100
+
+# Print results
+print("=== N₂O Emission Estimate ===")
+print(f"Mean: {mean_n2o:.4f} kg N₂O-N")
+print(f"Median: {median_n2o:.4f} kg N₂O-N")
+print(f"95% CI: {lower_ci:.4f} – {upper_ci:.4f} kg N₂O-N")
+print(f"Relative Uncertainty: -{ru_low:.2f}% / +{ru_high:.2f}%")
+
+
+####n2--denitrification
+
+import numpy as np
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# Parameters
+n_samples = 100000
+
+# Central values
+n2o_mean = 0.25  # in Tg N2O
+frac_mean = 1.7
+molecular_ratio = 14 / 28  # N₂ per N2O
+
+# Uncertainty parameters
+# N₂O: asymmetric uncertainty
+n2o_low = n2o_mean * (1 - 0.3882)
+n2o_high = n2o_mean * (1 + 0.5254)
+
+# Fit lognormal for N₂O
+n2o_sigma = (np.log(n2o_high) - np.log(n2o_low)) / (2 * 1.96)
+n2o_mu = np.log(n2o_mean)
+n2o_samples = np.random.lognormal(mean=n2o_mu, sigma=n2o_sigma, size=n_samples)
+
+# Fraction: normal distribution with 10% uncertainty
+frac_std = frac_mean * 0.10
+frac_samples = np.random.normal(loc=frac_mean, scale=frac_std, size=n_samples)
+frac_samples = np.clip(frac_samples, 0, None)  # avoid negative fractions
+
+# Calculate N₂ samples
+n2_samples = frac_samples * n2o_samples * molecular_ratio
+
+# Summary statistics
+mean_n2 = np.mean(n2_samples)
+median_n2 = np.median(n2_samples)
+ci_lower = np.percentile(n2_samples, 2.5)
+ci_upper = np.percentile(n2_samples, 97.5)
+
+ru_low = (mean_n2 - ci_lower) / mean_n2 * 100
+ru_high = (ci_upper - mean_n2) / mean_n2 * 100
+
+# Output
+print("=== N₂ Emission Estimate (Monte Carlo, 95% CI) ===")
+print(f"Mean N₂: {mean_n2:.4f} Tg")
+print(f"Median N₂: {median_n2:.4f} Tg")
+print(f"95% Confidence Interval: {ci_lower:.4f} – {ci_upper:.4f} Tg")
+print(f"Relative Uncertainty: -{ru_low:.2f}% / +{ru_high:.2f}%")
+
+
+## leaching
+import numpy as np
+
+# Define sources with their activity values, activity RU, EF values, and EF RU
+sources = {
+    "Fertilizer": {"activity": 20.4, "act_ru": 0.10, "ef": 0.10, "ef_ru": 0.10},
+    "Manure": {"activity": 2.28, "act_ru": 0.295, "ef": 0.10, "ef_ru": 0.10},
+    "Irrigation": {"activity": 0.65, "act_ru": 0.10, "ef": 0.04, "ef_ru": 0.33},
+    "Deposition": {"activity": 3.79, "act_ru": 0.11, "ef": 0.04, "ef_ru": 0.33},
+    "Excretion": {"activity": 0.0, "act_ru": 2.38, "ef": 0.04, "ef_ru": 0.33},
+    "BNF": {"activity": 5.69, "act_ru": 0.1732, "ef": 0.04, "ef_ru": 0.33}
+}
+
+total_leach = 0
+total_variance = 0
+
+print("=== Leach Loss Contribution by Source ===")
+for name, data in sources.items():
+    A = data["activity"]
+    RU_A = data["act_ru"]
+    EF = data["ef"]
+    RU_EF = data["ef_ru"]
+
+    mean_contribution = A * EF
+    ru_total = np.sqrt(RU_A**2 + RU_EF**2)
+    abs_uncertainty = mean_contribution * ru_total
+    variance = abs_uncertainty ** 2
+
+    total_leach += mean_contribution
+    total_variance += variance
+
+    print(f"{name:<12}: {mean_contribution:.4f} ± {abs_uncertainty:.4f} (kg N)  |  RU: {ru_total*100:.2f}%")
+
+# Final total
+total_uncertainty = np.sqrt(total_variance)
+relative_uncertainty = (total_uncertainty / total_leach) * 100
+
+print("\n=== Total Leach Loss ===")
+print(f"Leach Loss = {total_leach:.4f} ± {total_uncertainty:.4f} kg N")
+print(f"Relative Uncertainty = ±{relative_uncertainty:.2f}%")
+
+
+##runoff losses
+
+import numpy as np
+
+# Define the input data for runoff
+sources = {
+    "Fertilizer": {"activity": 20.4, "act_ru": 0.10, "ef": 0.20, "ef_ru": 0.30},
+    "Manure": {"activity": 2.28, "act_ru": 0.295, "ef": 0.20, "ef_ru": 0.30},
+    "Irrigation": {"activity": 0.65, "act_ru": 0.10, "ef": 0.05, "ef_ru": 0.33},
+    "Deposition": {"activity": 3.79, "act_ru": 0.11, "ef": 0.05, "ef_ru": 0.33},
+    "Excretion": {"activity": 0.0, "act_ru": 2.38, "ef": 0.05, "ef_ru": 0.33},
+    "BNF": {"activity": 5.69, "act_ru": 0.1732, "ef": 0.05, "ef_ru": 0.33}
+}
+
+total_runoff = 0
+total_variance = 0
+
+print("=== Runoff Losses by Source ===")
+for name, data in sources.items():
+    A = data["activity"]
+    RU_A = data["act_ru"]
+    EF = data["ef"]
+    RU_EF = data["ef_ru"]
+
+    runoff = A * EF
+    combined_ru = np.sqrt(RU_A**2 + RU_EF**2)
+    abs_uncertainty = runoff * combined_ru
+    variance = abs_uncertainty ** 2
+
+    total_runoff += runoff
+    total_variance += variance
+
+    print(f"{name:<12}: {runoff:.4f} ± {abs_uncertainty:.4f} kg N  |  RU: {combined_ru*100:.2f}%")
+
+# Totals
+total_uncertainty = np.sqrt(total_variance)
+relative_uncertainty = (total_uncertainty / total_runoff) * 100
+
+print("\n=== Total Runoff Loss ===")
+print(f"Runoff = {total_runoff:.4f} ± {total_uncertainty:.4f} kg N")
+print(f"Relative Uncertainty = ±{relative_uncertainty:.2f}%")
+
+
+##########################################MONTE CARLO SIMULATIONS:############################
+
+###Livestock outputs
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define nitrogen input sources with nominal values and relative uncertainties
+inputs = {
+    'Grain_feed': {'nominal': 2.6, 'rel_uncertainty': 0.484},
+    'Straw_feed': {'nominal': 5.2, 'rel_uncertainty': 0.1035},
+    'Straw_ammoniation': {'nominal': 3.8, 'rel_uncertainty': 0.1414},
+    'Food_kitchen_waste': {'nominal': 0.38, 'rel_uncertainty': 0.15},
+    'Fish_powder': {'nominal': 0.46, 'rel_uncertainty': 0.1585},
+    'Forage': {'nominal': 0.0003, 'rel_uncertainty': 0.2108},
+    'Imported_feed': {'nominal': 1.8, 'rel_uncertainty': 1.46},  # 146%
+}
+
+# Monte Carlo simulation settings
+n_simulations = 10000
+total_inputs = []
+
+# Monte Carlo sampling
+for _ in range(n_simulations):
+    sample_sum = sum(
+        np.random.normal(info['nominal'], info['nominal'] * info['rel_uncertainty'])
+        for info in inputs.values()
+    )
+    total_inputs.append(sample_sum)
+
+# Convert to numpy array
+total_inputs = np.array(total_inputs)
+
+# Compute statistics
+mean_total = np.mean(total_inputs)
+std_total = np.std(total_inputs)
+pi_lower, pi_upper = np.percentile(total_inputs, [2.5, 97.5])
+ru_percent = (std_total / mean_total) * 100
+
+# Print results
+print(f"Mean Total N Input = {mean_total:.2f} Tg")
+print(f"Standard Deviation = {std_total:.2f}")
+print(f"95% Prediction Interval = [{pi_lower:.2f}, {pi_upper:.2f}]")
+print(f"Relative Uncertainty = ±{ru_percent:.2f}%")
+
+# Plot histogram
+plt.figure(figsize=(10, 6))
+plt.hist(total_inputs, bins=50, density=True, alpha=0.7, edgecolor='black', label='Monte Carlo Results')
+
+# Overlay normal distribution
+x = np.linspace(mean_total - 4 * std_total, mean_total + 4 * std_total, 1000)
+pdf = (1 / (std_total * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean_total) / std_total)**2)
+plt.plot(x, pdf, 'r-', label='Normal Distribution')
+
+# Labels and textbox
+plt.xlabel("Total Nitrogen Input (Tg)")
+plt.ylabel("Density")
+
+plt.legend()
+
+# Text box on top-left
+plt.text(x.min(), plt.ylim()[1]*0.9,
+         f"Mean = {mean_total:.2f} Tg\n"
+         f"SD = {std_total:.2f}\n"
+         f"95% PI = [{pi_lower:.2f}, {pi_upper:.2f}]\n"
+         f"RU = ±{ru_percent:.2f}%",
+         fontsize=11, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8))
+
+plt.tight_layout()
+plt.show()
+plt.savefig("Inputs_livestock.png", dpi=1200)
+
+
+####imported feed:
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Given values and relative uncertainties
+A_nominal = 14.26
+A_rel_unc = 0.1577  # 15.77%
+
+B_nominal = 12.43
+B_rel_unc = 0.1182  # 11.82%
+
+# Absolute uncertainties
+A_sd = A_nominal * A_rel_unc
+B_sd = B_nominal * B_rel_unc
+
+# Number of simulations
+n_sim = 10000
+
+# Monte Carlo sampling
+A_samples = np.random.normal(A_nominal, A_sd, n_sim)
+B_samples = np.random.normal(B_nominal, B_sd, n_sim)
+
+# Subtract
+Z_samples = A_samples - B_samples
+
+# Stats
+mean_Z = np.mean(Z_samples)
+std_Z = np.std(Z_samples)
+ci_lower, ci_upper = np.percentile(Z_samples, [2.5, 97.5])
+ru_Z = (std_Z / mean_Z) * 100 if mean_Z != 0 else np.inf
+
+# Print results
+print(f"Mean Difference (A - B): {mean_Z:.2f}")
+print(f"Standard Deviation: {std_Z:.2f}")
+print(f"95% Confidence Interval: [{ci_lower:.2f}, {ci_upper:.2f}]")
+print(f"Relative Uncertainty: ±{ru_Z:.2f}%")
+
+
+
+##LIVESTOCK OUTPUTS
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define outputs and uncertainties
+outputs = {
+    'Human_consumption': {'nominal': 1.2, 'rel_uncertainty': 0.1118},
+    'Animal_product_export': {'nominal': 0.03, 'rel_uncertainty': 0.10},
+    'Industrial_material': {'nominal': 0.15, 'rel_uncertainty': 0.0982},
+    'Livestock_manure': {'nominal': 13.06, 'rel_uncertainty': 0.1725},
+}
+
+# Monte Carlo simulation settings
+n_simulations = 10000
+total_outputs = []
+
+# Monte Carlo sampling
+for _ in range(n_simulations):
+    sample_sum = sum(
+        np.random.normal(info['nominal'], info['nominal'] * info['rel_uncertainty'])
+        for info in outputs.values()
+    )
+    total_outputs.append(sample_sum)
+
+# Convert to numpy array
+total_outputs = np.array(total_outputs)
+
+# Statistics
+mean_out = np.mean(total_outputs)
+std_out = np.std(total_outputs)
+pi_lower, pi_upper = np.percentile(total_outputs, [2.5, 97.5])
+ru_percent = (std_out / mean_out) * 100
+
+# Print results
+print(f"Mean Total N Output = {mean_out:.2f} Tg")
+print(f"Standard Deviation = {std_out:.2f}")
+print(f"95% Prediction Interval = [{pi_lower:.2f}, {pi_upper:.2f}]")
+print(f"Relative Uncertainty = ±{ru_percent:.2f}%")
+
+# Plot histogram
+plt.figure(figsize=(10, 6))
+plt.hist(total_outputs, bins=50, density=True, alpha=0.7, edgecolor='black', label='Monte Carlo Results')
+
+# Overlay normal curve
+x = np.linspace(mean_out - 4*std_out, mean_out + 4*std_out, 1000)
+pdf = (1 / (std_out * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean_out) / std_out)**2)
+plt.plot(x, pdf, 'r-', label='Normal Distribution')
+
+# Labels and text
+plt.xlabel("Total Nitrogen Output (Tg)")
+plt.ylabel("Density")
+
+plt.legend()
+
+plt.text(x.min(), plt.ylim()[1]*0.9,
+         f"Mean = {mean_out:.2f} Tg\n"
+         f"SD = {std_out:.2f}\n"
+         f"95% PI = [{pi_lower:.2f}, {pi_upper:.2f}]\n"
+         f"RU = ±{ru_percent:.2f}%",
+         fontsize=11, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8))
+
+# Save image in current directory (download manually if needed)
+plt.tight_layout()
+plt.savefig("N_output_simulation.png", dpi=1200)
+plt.show()
+
+
+
+###EMISSION CROPLANDS___MONTE CARLO
+import numpy as np
+import matplotlib.pyplot as plt
+
+# === 1. Define emissions and uncertainties ===
+emissions = {
+    'NH3_volatilization': {'nominal': 4.7, 'rel_unc_low': 0.1868, 'rel_unc_high': 0.1868},
+    'NH3_field_burning': {'nominal': 0.14, 'rel_unc_low': 0.672, 'rel_unc_high': 0.672},
+    'NOx_field_burning': {'nominal': 0.2, 'rel_unc_low': 0.604, 'rel_unc_high': 0.604},
+    'N2O_field_burning': {'nominal': 0.01, 'rel_unc_low': 0.34, 'rel_unc_high': 0.34},
+    'N2_field_burning': {'nominal': 0.65, 'rel_unc_low': 0.2297, 'rel_unc_high': 0.2297},
+    'NO_soil': {'nominal': 0.27, 'rel_unc_low': 0.2663, 'rel_unc_high': 0.3766},
+    'N2O_soil': {'nominal': 0.25, 'rel_unc_low': 0.3882, 'rel_unc_high': 0.5254},
+    'N2_soil': {'nominal': 0.22, 'rel_unc_low': 0.4143, 'rel_unc_high': 0.5907},
+    'Leaching': {'nominal': 2.7, 'rel_unc_low': 0.1173, 'rel_unc_high': 0.1173},
+    'Runoff': {'nominal': 5.4, 'rel_unc_low': 0.259, 'rel_unc_high': 0.259},
+}
+
+# === 2. Monte Carlo settings ===
+n_simulations = 10000
+total_emissions = []
+
+# === 3. Monte Carlo sampling loop ===
+for _ in range(n_simulations):
+    sample_sum = 0
+    for data in emissions.values():
+        nominal = data['nominal']
+        low = nominal * (1 - data['rel_unc_low'])
+        high = nominal * (1 + data['rel_unc_high'])
+        
+        # Estimate lognormal parameters
+        sigma = (np.log(high) - np.log(low)) / (2 * 1.96)
+        mu = np.log(nominal)
+        
+        # Sample from lognormal
+        sample = np.random.lognormal(mean=mu, sigma=sigma)
+        sample_sum += sample
+    
+    total_emissions.append(sample_sum)
+
+# === 4. Analyze results ===
+total_emissions = np.array(total_emissions)
+mean_emission = np.mean(total_emissions)
+std_dev = np.std(total_emissions)
+pi_lower, pi_upper = np.percentile(total_emissions, [2.5, 97.5])
+ru_percent = (std_dev / mean_emission) * 100
+
+# === 5. Print summary ===
+print(f"Mean Total Emissions: {mean_emission:.2f} Tg N")
+print(f"Standard Deviation: {std_dev:.2f} Tg")
+print(f"95% Prediction Interval: [{pi_lower:.2f}, {pi_upper:.2f}] Tg")
+print(f"Relative Uncertainty: ±{ru_percent:.2f}%")
+
+# === 6. Plot results ===
+plt.figure(figsize=(10, 6))
+plt.hist(total_emissions, bins=50, density=True, alpha=0.7, edgecolor='black', label='Monte Carlo Results')
+
+# Overlay normal curve for reference
+x = np.linspace(mean_emission - 4 * std_dev, mean_emission + 4 * std_dev, 1000)
+pdf = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean_emission) / std_dev)**2)
+plt.plot(x, pdf, 'r-', label='Normal Distribution')
+
+# Plot text and labels
+plt.xlabel("Total Nitrogen Emissions (Tg)")
+plt.ylabel("Density")
+plt.title("Monte Carlo Simulation of Total N Emissions")
+plt.legend()
+
+# Annotate results
+plt.text(x.min(), plt.ylim()[1] * 0.9,
+         f"Mean = {mean_emission:.2f} Tg\n"
+         f"SD = {std_dev:.2f}\n"
+         f"95% PI = [{pi_lower:.2f}, {pi_upper:.2f}]\n"
+         f"RU = ±{ru_percent:.2f}%",
+         fontsize=11, verticalalignment='top',
+         bbox=dict(facecolor='white', alpha=0.8))
+
+# Save and show plot
+plt.tight_layout()
+plt.savefig("Total_Emissions_CROPLAND.png", dpi=1200)
+plt.show()
+
+
+
+####OUTPUT_CROPLAND
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define components and their uncertainties
+uses = {
+    'Human_Grain_Consumption': {'nominal': 4.1, 'rel_unc': 0.1118},
+    'Grain_Export': {'nominal': 0.42, 'rel_unc': 0.0643},
+    'Fish_Feed': {'nominal': 2.8, 'rel_unc': 0.0782},
+    'Livestock_Grain_Feed': {'nominal': 2.6, 'rel_unc': 0.484},
+    'Livestock_Straw_Feed': {'nominal': 5.2, 'rel_unc': 0.1035},
+    'Domestic_Straw_Fuel': {'nominal': 1.24, 'rel_unc': 0.0843},
+    'Straw_Industrial_Material': {'nominal': 0.6, 'rel_unc': 0.0928},
+    'Thatching': {'nominal': 0.45, 'rel_unc': 0.0806},
+    'Other_Straw_Fates': {'nominal': 1.05, 'rel_unc': 0.1748},
+}
+
+# Monte Carlo settings
+n_simulations = 10000
+total_uses = []
+
+# Run simulation
+for _ in range(n_simulations):
+    sample_sum = 0
+    for data in uses.values():
+        sample = np.random.normal(
+            loc=data['nominal'],
+            scale=data['nominal'] * data['rel_unc']
+        )
+        sample_sum += sample
+    total_uses.append(sample_sum)
+
+# Convert to array and analyze
+total_uses = np.array(total_uses)
+mean_use = np.mean(total_uses)
+std_dev = np.std(total_uses)
+pi_lower, pi_upper = np.percentile(total_uses, [2.5, 97.5])
+ru_percent = (std_dev / mean_use) * 100
+
+# Print results
+print(f"Mean Total Use = {mean_use:.2f} Tg")
+print(f"Standard Deviation = {std_dev:.2f}")
+print(f"95% Prediction Interval = [{pi_lower:.2f}, {pi_upper:.2f}]")
+print(f"Relative Uncertainty = ±{ru_percent:.2f}%")
+
+# Plot
+plt.figure(figsize=(10, 6))
+plt.hist(total_uses, bins=50, density=True, alpha=0.7, edgecolor='black', label='Monte Carlo Results')
+
+# Normal overlay
+x = np.linspace(mean_use - 4*std_dev, mean_use + 4*std_dev, 1000)
+pdf = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean_use) / std_dev)**2)
+plt.plot(x, pdf, 'r-', label='Normal Distribution')
+
+# Labels
+plt.xlabel("Total Grain & Straw Use (Tg)")
+plt.ylabel("Density")
+plt.title("Monte Carlo Simulation: Total Grain & Straw Use")
+plt.legend()
+
+plt.text(x.min(), plt.ylim()[1]*0.9,
+         f"Mean = {mean_use:.2f} Tg\n"
+         f"SD = {std_dev:.2f}\n"
+         f"95% PI = [{pi_lower:.2f}, {pi_upper:.2f}]\n"
+         f"RU = ±{ru_percent:.2f}%",
+         fontsize=11, verticalalignment='top',
+         bbox=dict(facecolor='white', alpha=0.8))
+
+# Save and show
+plt.tight_layout()
+plt.savefig("Grain_Straw_Uses_MonteCarlo.png", dpi=1200)
+plt.show()
+
+
+
+##INPUTS_CROPLAND
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define nitrogen input sources and uncertainties
+inputs = {
+    'Fertilizer': {'nominal': 20.4, 'rel_unc': 0.10},
+    'Human_Excretion': {'nominal': 0.0, 'rel_unc': 2.38},  # Will have negligible effect since nominal = 0
+    'Deposition': {'nominal': 3.79, 'rel_unc': 0.11},
+    'Irrigation': {'nominal': 0.65, 'rel_unc': 0.10},
+    'BNF': {'nominal': 5.69, 'rel_unc': 0.1732},
+    'Livestock_Manure': {'nominal': 2.28, 'rel_unc': 0.295},
+    'Straw': {'nominal': 0.26, 'rel_unc': 0.3727},
+    'Kitchen_Waste': {'nominal': 0.05, 'rel_unc': 0.1414}
+}
+
+# Monte Carlo setup
+n_simulations = 10000
+total_inputs = []
+
+# Simulation loop
+for _ in range(n_simulations):
+    sample_sum = 0
+    for data in inputs.values():
+        sd = data['nominal'] * data['rel_unc']
+        sample = np.random.normal(loc=data['nominal'], scale=sd)
+        sample_sum += sample
+    total_inputs.append(sample_sum)
+
+# Convert to array and analyze
+total_inputs = np.array(total_inputs)
+mean_input = np.mean(total_inputs)
+std_dev = np.std(total_inputs)
+pi_lower, pi_upper = np.percentile(total_inputs, [2.5, 97.5])
+ru_percent = (std_dev / mean_input) * 100
+
+# Print results
+print(f"Mean Total N Input = {mean_input:.2f} Tg")
+print(f"Standard Deviation = {std_dev:.2f} Tg")
+print(f"95% Prediction Interval = [{pi_lower:.2f}, {pi_upper:.2f}]")
+print(f"Relative Uncertainty = ±{ru_percent:.2f}%")
+
+# Plot
+plt.figure(figsize=(10, 6))
+plt.hist(total_inputs, bins=50, density=True, alpha=0.7, edgecolor='black', label='Monte Carlo Results')
+
+# Overlay normal distribution
+x = np.linspace(mean_input - 4*std_dev, mean_input + 4*std_dev, 1000)
+pdf = (1 / (std_dev * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean_input) / std_dev) ** 2)
+plt.plot(x, pdf, 'r-', label='Normal Distribution')
+
+# Labels
+plt.xlabel("Total Nitrogen Input (Tg)")
+plt.ylabel("Density")
+plt.title("Monte Carlo Simulation: Total Nitrogen Inputs")
+plt.legend()
+
+plt.text(x.min(), plt.ylim()[1]*0.9,
+         f"Mean = {mean_input:.2f} Tg\n"
+         f"SD = {std_dev:.2f}\n"
+         f"95% PI = [{pi_lower:.2f}, {pi_upper:.2f}]\n"
+         f"RU = ±{ru_percent:.2f}%",
+         fontsize=11, verticalalignment='top',
+         bbox=dict(facecolor='white', alpha=0.8))
+
+# Save and show
+plt.tight_layout()
+plt.savefig("Total_Nitrogen_Inputs_MonteCarlo.png", dpi=1200)
+plt.show()
+
+
+
+
+
+##########################AQUACULTURE#####################
+import numpy as np
+
+# Input values
+fish_feed = 2.8                      # Tg
+fish_feed_unc_percent = 7.82        # %
+fraction = 0.20                     # 20% of fish feed
+fraction_unc_percent = 33           # %
+
+# Calculate N-fertilizer
+n_fertilizer = fish_feed * fraction
+
+# Relative uncertainty of product
+ru_combined = np.sqrt(fish_feed_unc_percent**2 + fraction_unc_percent**2)
+
+# Absolute uncertainty
+n_fert_unc_absolute = n_fertilizer * (ru_combined / 100)
+
+# Output
+print(f"✅ N-fertilizer = {n_fertilizer:.3f} Tg")
+print(f"✅ Absolute Uncertainty = ±{n_fert_unc_absolute:.3f} Tg")
+print(f"✅ Relative Uncertainty = ±{ru_combined:.2f}%")
+
+
+
+####N DEPOSITION
+import numpy as np
+
+# Inputs
+dep_rate = 14.5              # kg N/ha/year
+dep_rate_unc = 0.035         # 3.5%
+
+area = 140_000_000           # hectares
+area_unc = 0.10              # 10%
+
+# Step 1: Compute N deposition in kg
+n_dep_kg = dep_rate * area
+
+# Step 2: Convert to Tg (1 Tg = 1e12 g = 1e9 kg)
+n_dep_Tg = n_dep_kg / 1e9
+
+# Step 3: Combined relative uncertainty
+rel_unc = np.sqrt(dep_rate_unc**2 + area_unc**2)
+
+# Step 4: Absolute uncertainty in Tg
+abs_unc_Tg = n_dep_Tg * rel_unc
+
+# Final Output
+print(f"✅ N Deposition = {n_dep_Tg:.3f} Tg/year ± {abs_unc_Tg:.3f} Tg/year")
+print(f"Relative Uncertainty = ±{rel_unc * 100:.2f}%")
+
+
+
+##human consumption of aquatic products
+import numpy as np
+
+# Given values
+per_cap_n = 0.39               # g N/cap/day
+per_cap_unc = 0.10             # 10%
+
+population = 1_396_387_127     # people
+pop_unc = 0.05                 # 5%
+
+days = 365
+g_to_tg = 1e-12                # convert g to Tg
+
+# Calculate total N consumption
+total_n_g = per_cap_n * population * days
+total_n_tg = total_n_g * g_to_tg
+
+# Propagate uncertainty
+rel_unc = np.sqrt(per_cap_unc**2 + pop_unc**2)
+abs_unc_tg = total_n_tg * rel_unc
+
+# Output
+print(f"✅ Total Human N Consumption = {total_n_tg:.3f} Tg/year ± {abs_unc_tg:.3f} Tg")
+print(f"Relative Uncertainty = ±{rel_unc * 100:.2f}%")
+
+
+##aquatic product export
+import numpy as np
+
+# Given
+marine_prod = 1_377_244       # tonnes
+marine_unc = 0.10             # 10%
+
+export_frac = 0.03            # 3%
+export_unc = 0.10             # 10%
+
+# Step 1: Calculate export value
+export_val = marine_prod * export_frac
+
+# Step 2: Combined relative uncertainty
+rel_unc = np.sqrt(marine_unc**2 + export_unc**2)
+abs_unc = export_val * rel_unc
+
+# Output
+print(f"✅ Aquatic Product Export = {export_val:.0f} tonnes ± {abs_unc:.0f} tonnes")
+print(f"Relative Uncertainty = ±{rel_unc * 100:.2f}%")
+
+
+##surplus in aquatic###
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Define nitrogen inputs and their relative uncertainties
+inputs = {
+    'N_fertilizer': {'nominal': 0.56, 'rel_unc': 0.3391},
+    'Fish_feed': {'nominal': 2.8, 'rel_unc': 0.0782},
+    'N_deposition': {'nominal': 0.16, 'rel_unc': 0.11},
+}
+
+# Number of Monte Carlo simulations
+n_simulations = 10000
+total_inputs = []
+
+# Monte Carlo sampling
+for _ in range(n_simulations):
+    sample_sum = 0
+    for key, val in inputs.items():
+        sampled_value = np.random.normal(loc=val['nominal'], scale=val['nominal'] * val['rel_unc'])
+        sample_sum += sampled_value
+    total_inputs.append(sample_sum)
+
+# Convert results to array and compute stats
+total_inputs = np.array(total_inputs)
+mean_input = np.mean(total_inputs)
+std_input = np.std(total_inputs)
+pi_lower, pi_upper = np.percentile(total_inputs, [2.5, 97.5])
+ru_percent = (std_input / mean_input) * 100
+
+# Print results
+print(f"✅ Mean Total N Input = {mean_input:.3f} Tg")
+print(f"✅ Standard Deviation = {std_input:.3f} Tg")
+print(f"✅ 95% Prediction Interval = [{pi_lower:.3f}, {pi_upper:.3f}] Tg")
+print(f"✅ Relative Uncertainty = ±{ru_percent:.2f}%")
+
+# Plotting the distribution
+plt.figure(figsize=(10, 6))
+plt.hist(total_inputs, bins=50, density=True, alpha=0.7, edgecolor='black', label='Monte Carlo Results')
+
+# Overlay normal distribution
+x = np.linspace(mean_input - 4 * std_input, mean_input + 4 * std_input, 1000)
+pdf = (1 / (std_input * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((x - mean_input) / std_input) ** 2)
+plt.plot(x, pdf, 'r-', label='Normal Distribution')
+
+# Annotate
+plt.xlabel("Total N Input (Tg)")
+plt.ylabel("Density")
+plt.title("Monte Carlo Simulation: Sum of N Inputs")
+plt.legend()
+
+# Add text box with summary stats
+plt.text(x.min(), plt.ylim()[1]*0.9,
+         f"Mean = {mean_input:.3f} Tg\n"
+         f"SD = {std_input:.3f}\n"
+         f"95% PI = [{pi_lower:.3f}, {pi_upper:.3f}]\n"
+         f"RU = ±{ru_percent:.2f}%",
+         fontsize=11, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.8))
+
+# Save figure
+plt.tight_layout()
+plt.savefig("Total_N_Inputs_MonteCarlo.png", dpi=1200)
+plt.show()
+
+
+###surplus in aquatic environment
+import numpy as np
+
+# Given values (Tg N)
+input_val = 3.52
+input_sd = 0.289  # Standard deviation
+
+human = 0.2
+human_sd = human * 0.1118
+
+export = 0.04
+export_sd = export * 0.1414
+
+feed = 0.46
+feed_sd = feed * 0.1585
+
+# Surplus calculation
+surplus = input_val - human - export - feed
+
+# Combined uncertainty
+surplus_sd = np.sqrt(input_sd**2 + human_sd**2 + export_sd**2 + feed_sd**2)
+
+# Output
+print(f"✅ Surplus = {surplus:.3f} Tg")
+print(f"✅ Standard Deviation = ±{surplus_sd:.3f} Tg")
+print(f"✅ 95% Confidence Interval = [{surplus - 1.96*surplus_sd:.3f}, {surplus + 1.96*surplus_sd:.3f}]")
+print(f"✅ Relative Uncertainty = ±{(surplus_sd / surplus) * 100:.2f}%")
+
+
+
+##NH3 EMISSION_AQUACULTURE
+import numpy as np
+
+# Given
+surplus = 2.8
+surplus_ru = 0.2093  # 20.93%
+
+ef = 0.15
+ef_ru = 0.10  # 10%
+
+# Calculate NH3 emission
+nh3 = surplus * ef
+
+# Combined relative uncertainty
+ru_total = np.sqrt(surplus_ru**2 + ef_ru**2)
+abs_unc = nh3 * ru_total
+
+# Output
+print(f"✅ NH₃ Emission = {nh3:.3f} Tg ± {abs_unc:.3f} Tg")
+print(f"✅ Relative Uncertainty = ±{ru_total * 100:.2f}%")
+
+
+
+##RUNOFF
+import numpy as np
+
+# Given
+surplus = 2.8
+surplus_ru = 0.2093  # 20.93%
+
+runoff_ef = 0.10
+runoff_ru = 0.33     # 33%
+
+# Calculate runoff
+runoff = surplus * runoff_ef
+
+# Propagate uncertainty
+combined_ru = np.sqrt(surplus_ru**2 + runoff_ru**2)
+runoff_unc = runoff * combined_ru
+
+# Output
+print(f"✅ N Runoff = {runoff:.3f} Tg ± {runoff_unc:.3f} Tg")
+print(f"✅ Relative Uncertainty = ±{combined_ru * 100:.2f}%")
+
+
+###N2 EMISSION
+import numpy as np
+
+# Given
+surplus = 2.8
+surplus_ru = 0.2093  # 20.93%
+
+n2_ef = 0.50
+n2_ef_ru = 0.33  # 33%
+
+# Calculate N2 emission
+n2_loss = surplus * n2_ef
+
+# Combine relative uncertainty
+combined_ru = np.sqrt(surplus_ru**2 + n2_ef_ru**2)
+n2_unc = n2_loss * combined_ru
+
+# Output
+print(f"✅ N₂ Loss = {n2_loss:.2f} Tg ± {n2_unc:.2f} Tg")
+print(f"✅ Relative Uncertainty = ±{combined_ru * 100:.2f}%")
+
+
+###N2O EMISSION
+
+import numpy as np
+
+# Given
+surplus = 2.8
+surplus_ru = 0.2093  # 20.93%
+
+n2o_ef = 0.0125       # 1.25%
+n2o_ef_ru = 0.10      # 10%
+
+# Calculate N2O emission
+n2o = surplus * n2o_ef
+
+# Combined relative uncertainty
+combined_ru = np.sqrt(surplus_ru**2 + n2o_ef_ru**2)
+n2o_unc = n2o * combined_ru
+
+# Output
+print(f"✅ N₂O Emission = {n2o:.4f} Tg ± {n2o_unc:.4f} Tg")
+print(f"✅ Relative Uncertainty = ±{combined_ru * 100:.2f}%")
