@@ -11,14 +11,6 @@
 
 India has pledged to halve nitrogen (N) waste by 2030, yet achieving this target demands a system-scale understanding of where and how nitrogen is lost across the agricultural system. This repository provides the data and code underlying a national-scale Environmentally Extended Input–Output (EEIO) model that quantifies nitrogen inputs, flows, and losses across India's **cropland**, **livestock**, and **aquaculture** sectors for the years **2000 and 2020**.
 
-Key findings:
-- Nitrogen use efficiency (NUE) in 2020: **cropland (56%)**, **aquaculture (20%)**, **livestock (8%)**
-- Only **50%** of applied agricultural N was converted to useful products (food, feed, fuel, non-food)
-- Remaining N was lost as reactive nitrogen (Nr): **17% NH₃**, **16% runoff**, **7% leaching**, **5% NOₓ**, **1.5% N₂O**
-- Emission estimates carry high uncertainty (**< ±54%**) due to limitations in activity data and emission factors
-
----
-
 ## Repository Structure
 
 ```
@@ -44,9 +36,6 @@ The EEIO model tracks nitrogen through a fundamental flow balance:
 - **5 pollutant outputs** — NH₃, NOₓ, N₂O, NO₂⁻, NO₃⁻
 
 Sector-specific EEIO formulations (SI-1) ensure no double-counting of N flows across the cropland, livestock, and aquaculture subsystems. Circularity is resolved prior to budget closure. Surplus N accumulation is computed as the residual between inputs and tracked outputs, consistent with other national-scale N budget methodologies.
-
-> Note: Due to data limitations, organic N losses to the hydrosphere, N cycling in grasslands, manure from grassland-reared livestock, and livestock biomass accumulation were excluded from the model scope (see Figure S1 in the paper).
-
 ---
 
 ## Data
