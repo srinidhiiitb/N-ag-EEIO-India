@@ -1,7 +1,6 @@
 ****[README.md](https://github.com/user-attachments/files/27098666/README.md)
 # National-Scale Nitrogen Budget for Indian Agriculture: An Environmentally Extended Input–Output Model
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
+(https://doi.org/10.5281/zenodo.19787921)
 
 > **Associated publication:** Babbar, D., Balasubramanian, S. National-scale nitrogen budgets reveal large inefficiencies in Indian agriculture. Commun Earth Environ (2026). https://doi.org/10.1038/s43247-026-03656-z
 
@@ -86,7 +85,7 @@ If you use this data or code, please cite the associated publication:
 
 And this repository:
 
-> Babbar, D., & Balasubramanian, S. (2025). *N-ag-EEIO-India* [Dataset and code]. [Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX](https://zenodo.org/records/19787922)
+> Babbar, D., & Balasubramanian, S. (2025). *N-ag-EEIO-India* [Dataset and code). https://doi.org/10.5281/zenodo.19787921
 
 ---
 
