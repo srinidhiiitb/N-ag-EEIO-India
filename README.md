@@ -3,7 +3,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.XXXXXXX.svg)](https://doi.org/10.5281/zenodo.XXXXXXX)
 
-> **Associated publication:** Babbar, D., & Balasubramanian, S. (provisionally accepted). *National-scale nitrogen budget reveals large inefficiencies in Indian agriculture.* Communications Earth & Environment.
+> **Associated publication:** Babbar, D., Balasubramanian, S. National-scale nitrogen budgets reveal large inefficiencies in Indian agriculture. Commun Earth Environ (2026). https://doi.org/10.1038/s43247-026-03656-z
 
 ---
 
@@ -82,11 +82,11 @@ Indian Institute of Technology Bombay (IIT Bombay)
 
 If you use this data or code, please cite the associated publication:
 
-> Babbar, D., & Balasubramanian, S. (under review). National-scale nitrogen budget reveals large inefficiencies in Indian agriculture. *Communications Earth & Environment.*
+> Babbar, D., Balasubramanian, S. National-scale nitrogen budgets reveal large inefficiencies in Indian agriculture. Commun Earth Environ (2026). https://doi.org/10.1038/s43247-026-03656-z
 
 And this repository:
 
-> Babbar, D., & Balasubramanian, S. (2025). *N-ag-EEIO-India* [Dataset and code]. Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX
+> Babbar, D., & Balasubramanian, S. (2025). *N-ag-EEIO-India* [Dataset and code]. [Zenodo. https://doi.org/10.5281/zenodo.XXXXXXX](https://zenodo.org/records/19787922)
 
 ---
 
